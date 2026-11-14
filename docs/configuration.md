@@ -21,7 +21,7 @@ signal-hub reads one YAML file (`SIGNAL_HUB_CONFIG`, default `/etc/signal-hub/co
 | `upstream.accountFile` | | file holding the bot's number (trimmed) |
 | `listen` | `:8080` | generic API, bearer token required |
 | `adminListen` | `:9090` | `/healthz`, `/readyz`, `/metrics`, no auth |
-| `database` | `/var/lib/signal-hub/hub.db` | SQLite file; its directory is the volume |
+| `database.url` | `sqlite:///var/lib/signal-hub/hub.db` | only the `sqlite` scheme with an absolute path is supported; its directory is the volume |
 | `retention` | `14d` | how long messages are kept |
 | `tokenDir` | `/etc/signal-hub/tokens` | one file per consumer |
 | `limits.maxRequestBytes` | `26214400` | body limit for `POST /v1/send` |

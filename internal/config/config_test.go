@@ -162,8 +162,8 @@ consumers:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Database != "/var/lib/signal-hub/hub.db" {
-		t.Errorf("Database = %q", cfg.Database)
+	if d := cfg.Database; d.URL != "sqlite:///var/lib/signal-hub/hub.db" || d.Driver != "sqlite" || d.Path != "/var/lib/signal-hub/hub.db" {
+		t.Errorf("Database = %+v", d)
 	}
 	if cfg.TokenDir != "/etc/signal-hub/tokens" {
 		t.Errorf("TokenDir = %q", cfg.TokenDir)
@@ -303,6 +303,18 @@ func TestValidationErrors(t *testing.T) {
 		{"token missing", func(t *testing.T, f *fixture) { delete(f.files, tokenDir+"/dsh") }, "consumers[0]: token file"},
 		{"token short", func(t *testing.T, f *fixture) { f.files[tokenDir+"/dsh"] = "short" }, "consumers[0]: token must be at least 32 characters"},
 		{"token shared", func(t *testing.T, f *fixture) { f.files[tokenDir+"/ops"] = f.files[tokenDir+"/dsh"] }, `consumers "dsh" and "ops" share a token`},
+		{"database postgres", func(t *testing.T, f *fixture) {
+			f.replace(t, "retention: 14d", "retention: 14d\ndatabase:\n  url: postgres://u@h/db")
+		}, `database.url: unsupported scheme "postgres"; only sqlite is supported`},
+		{"database relative", func(t *testing.T, f *fixture) {
+			f.replace(t, "retention: 14d", "retention: 14d\ndatabase:\n  url: sqlite://hub.db")
+		}, "database.url: sqlite needs an absolute path"},
+		{"database query", func(t *testing.T, f *fixture) {
+			f.replace(t, "retention: 14d", "retention: 14d\ndatabase:\n  url: sqlite:///x/hub.db?mode=ro")
+		}, "database.url: query parameters are not supported"},
+		{"old database path", func(t *testing.T, f *fixture) {
+			f.replace(t, "retention: 14d", "retention: 14d\ndatabase: /var/lib/x.db")
+		}, "parse config"},
 		{"empty document", func(t *testing.T, f *fixture) { f.yaml = "" }, "config is empty"},
 	}
 	for _, tt := range tests {

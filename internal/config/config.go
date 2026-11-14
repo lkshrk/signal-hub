@@ -23,7 +23,7 @@ const (
 	minTokenLen     = 32
 	defaultListen   = ":8080"
 	defaultAdmin    = ":9090"
-	defaultDatabase = "/var/lib/signal-hub/hub.db"
+	defaultDatabase = "sqlite:///var/lib/signal-hub/hub.db"
 	defaultTokenDir = "/etc/signal-hub/tokens"
 	defaultMaxBody  = 26214400
 	defaultRetain   = 14 * 24 * time.Hour
@@ -41,7 +41,7 @@ type Config struct {
 	Upstream    Upstream   `yaml:"upstream"`
 	Listen      string     `yaml:"listen"`
 	AdminListen string     `yaml:"adminListen"`
-	Database    string     `yaml:"database"`
+	Database    Database   `yaml:"database"`
 	Retention   Duration   `yaml:"retention"`
 	TokenDir    string     `yaml:"tokenDir"`
 	Limits      Limits     `yaml:"limits"`
@@ -53,6 +53,12 @@ type Upstream struct {
 	Account         string `yaml:"account"`
 	AccountFile     string `yaml:"accountFile"`
 	ResolvedAccount string `yaml:"-"`
+}
+
+type Database struct {
+	URL    string `yaml:"url"`
+	Driver string `yaml:"-"`
+	Path   string `yaml:"-"`
 }
 
 type Limits struct {
@@ -119,7 +125,7 @@ func (c *Config) applyDefaults() {
 	}
 	setStr(&c.Listen, defaultListen)
 	setStr(&c.AdminListen, defaultAdmin)
-	setStr(&c.Database, defaultDatabase)
+	setStr(&c.Database.URL, defaultDatabase)
 	setStr(&c.TokenDir, defaultTokenDir)
 	if c.Retention == 0 {
 		c.Retention = Duration(defaultRetain)
@@ -190,6 +196,7 @@ func (c *Config) validate(env Env) []error {
 	} else if u, err := url.Parse(c.Upstream.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		fail("upstream.url: must be an http or https URL")
 	}
+	c.validateDatabase(fail)
 	if c.Retention < 0 {
 		fail("retention: must be positive")
 	}
@@ -300,4 +307,21 @@ func (c *Config) validate(env Env) []error {
 		}
 	}
 	return errs
+}
+
+func (c *Config) validateDatabase(fail func(format string, args ...any)) {
+	u, err := url.Parse(c.Database.URL)
+	switch {
+	case err != nil:
+		fail("database.url: not a valid URL")
+	case u.Scheme != "sqlite":
+		fail("database.url: unsupported scheme %q; only sqlite is supported (sqlite:///absolute/path)", u.Scheme)
+	case u.Host != "" || u.Opaque != "" || !strings.HasPrefix(u.Path, "/") || u.Path == "/":
+		fail("database.url: sqlite needs an absolute path, as sqlite:///absolute/path")
+	case u.RawQuery != "":
+		fail("database.url: query parameters are not supported")
+	default:
+		c.Database.Driver = u.Scheme
+		c.Database.Path = u.Path
+	}
 }

@@ -4,7 +4,8 @@ upstream:
   accountFile: /etc/signal-hub/account
 listen: ":8080"
 adminListen: ":9090"
-database: /var/lib/signal-hub/hub.db
+database:
+  url: sqlite:///var/lib/signal-hub/hub.db
 retention: 14d
 tokenDir: /etc/signal-hub/tokens
 limits:
