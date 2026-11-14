@@ -3,6 +3,7 @@ module github.com/lkshrk/signal-hub
 go 1.27.3
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/prometheus/client_golang v1.25.0
 	github.com/uptrace/bun v1.3.0
 	github.com/uptrace/bun/dialect/sqlitedialect v1.3.0
