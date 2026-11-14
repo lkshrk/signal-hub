@@ -29,6 +29,37 @@ Response 200:
 - With `wait`, an empty response after the wait expires returns `next` unchanged.
 - 400 for an `after` that is not a non-negative integer, or a `wait` or `limit` that is not an integer.
 
+## Events
+
+`GET /v1/events?after=<seq>` (Server-Sent Events)
+
+The server keeps the consumer's position (channel `events`), so a reconnect without a cursor continues where the last delivered event left off.
+
+Start position, first match wins:
+
+1. `Last-Event-ID` header (sent by EventSource on reconnect).
+2. `after` query parameter.
+3. The consumer's stored position.
+4. The log head (live from now).
+
+Stream:
+
+```
+: connected
+
+id: 43
+event: message
+data: {"seq":43,...}
+
+: keepalive
+```
+
+- `data` is one message in the [neutral format](message-format.md); `id` is its `seq`.
+- A gap over `maxReplayAge` is announced first as `event: missed` with `data: {"count":<n>}`. It is logged and counted like in pull, with channel `events`.
+- `: keepalive` is sent every 25 seconds.
+- The stored position advances only after an event was written and flushed. It never moves backwards.
+- 400 for a `Last-Event-ID` or `after` that is not a non-negative integer.
+
 ## Attachments
 
 `GET /v1/attachments/{id}`
