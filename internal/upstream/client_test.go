@@ -161,6 +161,27 @@ func TestTransportErrorHidesAccount(t *testing.T) {
 	}
 }
 
+func TestTruncatedBodyIsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		conn, buf, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			return
+		}
+		_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\npartial")
+		_ = buf.Flush()
+		_ = conn.Close()
+	}))
+	t.Cleanup(srv.Close)
+	c := New(srv.URL, account)
+	out, err := c.Do(context.Background(), "GET", "/v1/attachments/"+account, nil)
+	if !errors.Is(err, io.ErrUnexpectedEOF) || out != nil {
+		t.Fatalf("Do = %q, %v", out, err)
+	}
+	if want := "GET /v1/attachments/<account>: read body: unexpected EOF"; err.Error() != want {
+		t.Fatalf("err = %q, want %q", err, want)
+	}
+}
+
 func TestAttachmentStreams(t *testing.T) {
 	const size = 50 << 20
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

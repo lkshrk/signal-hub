@@ -96,7 +96,10 @@ func (c *Client) Do(ctx context.Context, method, path string, body []byte) ([]by
 		return nil, err
 	}
 	defer func() { _ = res.Body.Close() }()
-	out, _ := io.ReadAll(io.LimitReader(res.Body, maxResponse))
+	out, err := io.ReadAll(io.LimitReader(res.Body, maxResponse))
+	if err != nil {
+		return nil, &transportError{msg: c.Redact(fmt.Sprintf("%s %s: read body: %v", method, path, err)), err: err}
+	}
 	if err := c.statusError(method, path, res.StatusCode, out); err != nil {
 		return nil, err
 	}
