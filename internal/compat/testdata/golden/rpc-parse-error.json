@@ -1,0 +1,13 @@
+{
+  "name": "rpc-parse-error",
+  "kind": "rpc",
+  "rawBody": "{\"jsonrpc\":\"2.0\",\"method\":",
+  "upstreamReply": {
+    "status": 204,
+    "body": ""
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "response": "{\"error\":{\"code\":-32700,\"message\":\"parse error\"},\"id\":null,\"jsonrpc\":\"2.0\"}\n",
+  "upstream": []
+}

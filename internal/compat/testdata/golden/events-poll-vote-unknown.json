@@ -1,0 +1,16 @@
+{
+  "name": "events-poll-vote-unknown",
+  "kind": "events",
+  "path": "/api/v1/events?account=%2B4915112345678",
+  "upstreamReply": {
+    "status": 204,
+    "body": ""
+  },
+  "frames": [
+    "{\"envelope\":{\"source\":\"+4915187654321\",\"sourceNumber\":\"+4915187654321\",\"sourceUuid\":\"0b6a4f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b\",\"sourceName\":\"Owner\",\"sourceDevice\":1,\"timestamp\":1763114910000,\"serverReceivedTimestamp\":1763114910100,\"dataMessage\":{\"timestamp\":1763114910000,\"expiresInSeconds\":0,\"viewOnce\":false,\"pollVote\":{\"authorNumber\":\"+4915187654321\",\"authorUuid\":\"0b6a4f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b\",\"targetSentTimestamp\":1763114000000,\"optionIndexes\":[1],\"voteCount\":2},\"groupInfo\":{\"groupId\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"groupName\":\"hermes\",\"revision\":3,\"type\":\"DELIVER\"}}},\"account\":\"+4915112345678\"}"
+  ],
+  "status": 200,
+  "contentType": "text/event-stream",
+  "response": ": connected\n\ndata: {\"account\":\"+4915112345678\",\"envelope\":{\"dataMessage\":{\"expiresInSeconds\":0,\"groupInfo\":{\"groupId\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"groupName\":\"hermes\",\"revision\":3,\"type\":\"DELIVER\"},\"message\":\"🗳️ Poll vote: option 2 (poll 1763114000000)\",\"pollVote\":{\"authorNumber\":\"+4915187654321\",\"authorUuid\":\"0b6a4f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b\",\"optionIndexes\":[1],\"targetSentTimestamp\":1763114000000,\"voteCount\":2},\"timestamp\":1763114910000,\"viewOnce\":false},\"serverReceivedTimestamp\":1763114910100,\"source\":\"+4915187654321\",\"sourceDevice\":1,\"sourceName\":\"Owner\",\"sourceNumber\":\"+4915187654321\",\"sourceUuid\":\"0b6a4f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b\",\"timestamp\":1763114910000}}\n\n",
+  "upstream": []
+}

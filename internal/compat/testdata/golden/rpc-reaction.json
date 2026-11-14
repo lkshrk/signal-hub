@@ -1,0 +1,35 @@
+{
+  "name": "rpc-reaction",
+  "kind": "rpc",
+  "request": {
+    "id": "x",
+    "jsonrpc": "2.0",
+    "method": "sendReaction",
+    "params": {
+      "account": "+4915112345678",
+      "emoji": "👍",
+      "groupId": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "targetAuthor": "+4915187654321",
+      "targetTimestamp": 1763114500000
+    }
+  },
+  "upstreamReply": {
+    "status": 204,
+    "body": ""
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "response": "{\"id\":\"x\",\"jsonrpc\":\"2.0\",\"result\":{}}\n",
+  "upstream": [
+    {
+      "method": "POST",
+      "path": "/v1/reactions/+4915112345678",
+      "body": {
+        "reaction": "👍",
+        "recipient": "group.QUFFQ0F3UUZCZ2NJQ1FvTERBME9EeEFSRWhNVUZSWVhHQmthR3h3ZEhoOD0=",
+        "target_author": "+4915187654321",
+        "timestamp": 1763114500000
+      }
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "rpc-poll-create-incomplete",
+  "kind": "rpc",
+  "request": {
+    "id": "x",
+    "jsonrpc": "2.0",
+    "method": "sendPollCreate",
+    "params": {
+      "account": "+4915112345678",
+      "groupId": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "options": [
+        "Yes",
+        " "
+      ],
+      "question": "Only one?"
+    }
+  },
+  "upstreamReply": {
+    "status": 201,
+    "body": "{\"timestamp\":\"1763114850000\"}"
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "response": "{\"error\":{\"code\":-32603,\"message\":\"a poll needs a question and at least two options\"},\"id\":\"x\",\"jsonrpc\":\"2.0\"}\n",
+  "upstream": []
+}

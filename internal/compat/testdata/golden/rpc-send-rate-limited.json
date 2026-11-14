@@ -1,0 +1,34 @@
+{
+  "name": "rpc-send-rate-limited",
+  "kind": "rpc",
+  "request": {
+    "id": "x",
+    "jsonrpc": "2.0",
+    "method": "send",
+    "params": {
+      "account": "+4915112345678",
+      "groupId": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "message": "too fast"
+    }
+  },
+  "upstreamReply": {
+    "status": 400,
+    "body": "{\"error\":\"Failed to send message: [RateLimitException] Rate limit exceeded\"}"
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "response": "{\"error\":{\"code\":429,\"message\":\"rate limited: {\\\"error\\\":\\\"Failed to send message: [RateLimitException] Rate limit exceeded\\\"}\"},\"id\":\"x\",\"jsonrpc\":\"2.0\"}\n",
+  "upstream": [
+    {
+      "method": "POST",
+      "path": "/v2/send",
+      "body": {
+        "message": "too fast",
+        "number": "+4915112345678",
+        "recipients": [
+          "group.QUFFQ0F3UUZCZ2NJQ1FvTERBME9EeEFSRWhNVUZSWVhHQmthR3h3ZEhoOD0="
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "rpc-poll-create",
+  "kind": "rpc",
+  "request": {
+    "id": "x",
+    "jsonrpc": "2.0",
+    "method": "sendPollCreate",
+    "params": {
+      "account": "+4915112345678",
+      "allowMultiple": true,
+      "groupId": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "options": [
+        "✅ Approve",
+        "✏️ Changes",
+        "❌ Reject"
+      ],
+      "question": "Approve plan?"
+    }
+  },
+  "upstreamReply": {
+    "status": 201,
+    "body": "{\"timestamp\":\"1763114850000\"}"
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "response": "{\"id\":\"x\",\"jsonrpc\":\"2.0\",\"result\":{\"timestamp\":1763114850000}}\n",
+  "upstream": [
+    {
+      "method": "POST",
+      "path": "/v1/polls/+4915112345678",
+      "body": {
+        "allow_multiple_selections": true,
+        "answers": [
+          "✅ Approve",
+          "✏️ Changes",
+          "❌ Reject"
+        ],
+        "question": "Approve plan?",
+        "recipient": "group.QUFFQ0F3UUZCZ2NJQ1FvTERBME9EeEFSRWhNVUZSWVhHQmthR3h3ZEhoOD0="
+      }
+    }
+  ]
+}

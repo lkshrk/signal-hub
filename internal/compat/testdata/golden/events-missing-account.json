@@ -1,0 +1,13 @@
+{
+  "name": "events-missing-account",
+  "kind": "events",
+  "path": "/api/v1/events",
+  "upstreamReply": {
+    "status": 204,
+    "body": ""
+  },
+  "status": 400,
+  "contentType": "text/plain; charset=utf-8",
+  "response": "account query parameter required\n",
+  "upstream": []
+}
