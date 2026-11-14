@@ -24,7 +24,7 @@ signal-hub reads one YAML file (`SIGNAL_HUB_CONFIG`, default `/etc/signal-hub/co
 | `database.url` | `sqlite:///var/lib/signal-hub/hub.db` | only the `sqlite` scheme with an absolute path is supported; its directory is the volume |
 | `retention` | `14d` | how long messages are kept |
 | `tokenDir` | `/etc/signal-hub/tokens` | one file per consumer |
-| `limits.maxRequestBytes` | `26214400` | body limit for `POST /v1/send` |
+| `limits.maxRequestBytes` | `26214400` | body limit for `POST /v1/send` and compat RPC requests, and size limit for compat local attachments |
 | `consumers` | | at least one |
 
 Durations use Go syntax (`90s`, `10m`, `24h`) or whole days (`7d`).

@@ -48,10 +48,10 @@ The neutral message is what consumers receive from `GET /v1/messages` and `GET /
 | `edit` | yes |
 | `reaction` | yes |
 | `poll_vote` | yes |
-| `receipt` | compat mode only |
+| `receipt` | no; stored but never routed to a consumer, so compat mode does not relay it either |
 | `typing` | compat mode only |
-| `sync` | compat mode only |
-| `other` | compat mode only |
+| `sync` | no; stored but never routed to a consumer, so compat mode does not relay it either |
+| `other` | no; stored but never routed to a consumer, so compat mode does not relay it either |
 
 Precedence when an envelope carries several parts: `editMessage` > `dataMessage.reaction` > `dataMessage.pollVote` > `dataMessage` > `syncMessage` > `receiptMessage` > `typingMessage` > other. For `edit`, `text`, `quote`, `mentions`, `attachments` and `group` come from `editMessage.dataMessage`.
 
