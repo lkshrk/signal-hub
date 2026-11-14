@@ -71,6 +71,33 @@ func jsonEqual(a, b []byte) bool {
 	return reflect.DeepEqual(va, vb)
 }
 
+// Recordings the hub deliberately does not reproduce; their unrouted frames must stay off the stream.
+var deliberateDifferences = map[string]bool{"events-direct-receipt": true}
+
+func (f *fixture) withoutUnrouted(t *testing.T, g golden) string {
+	t.Helper()
+	want, dropped := g.Response, 0
+	for _, fr := range g.Frames {
+		p, err := message.Parse([]byte(fr))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c, ok := f.router.Route(p); ok && c == f.srv.Consumer {
+			continue
+		}
+		block := "data: " + string(compact([]byte(fr))) + "\n\n"
+		if !strings.Contains(want, block) {
+			t.Fatalf("recording lacks the block of an unrouted frame")
+		}
+		want = strings.Replace(want, block, "", 1)
+		dropped++
+	}
+	if dropped == 0 {
+		t.Fatalf("%s is listed as a deliberate difference but every frame is routed", g.Name)
+	}
+	return want
+}
+
 func TestGoldens(t *testing.T) {
 	for _, g := range loadGoldens(t) {
 		t.Run(g.Name, func(t *testing.T) {
@@ -108,8 +135,12 @@ func TestGoldens(t *testing.T) {
 			default:
 				t.Fatalf("kind %q", g.Kind)
 			}
-			if status != g.Status || ct != g.ContentType || body != g.Response {
-				t.Fatalf("got %d %q %q\nwant %d %q %q", status, ct, body, g.Status, g.ContentType, g.Response)
+			want := g.Response
+			if deliberateDifferences[g.Name] {
+				want = f.withoutUnrouted(t, g)
+			}
+			if status != g.Status || ct != g.ContentType || body != want {
+				t.Fatalf("got %d %q %q\nwant %d %q %q", status, ct, body, g.Status, g.ContentType, want)
 			}
 
 			calls := f.upstream.taken()
@@ -135,16 +166,21 @@ func (f *fixture) events(t *testing.T, g golden) (int, string, string) {
 	var out strings.Builder
 	out.WriteString(st.next(t))
 	f.awaitParked(t)
-	// Goldens pin the wire format, so frames go to this consumer without routing.
 	for _, fr := range g.Frames {
-		p, err := message.Parse([]byte(fr))
-		if err != nil {
-			t.Fatal(err)
-		}
-		f.appendFor(t, p, f.srv.Consumer, []byte(fr), baseTime)
+		f.appendFrame(t, []byte(fr), baseTime)
 	}
-	for range g.Frames {
-		out.WriteString(st.next(t))
+	if !deliberateDifferences[g.Name] {
+		for range g.Frames {
+			out.WriteString(st.next(t))
+		}
+		return st.res.StatusCode, st.res.Header.Get("Content-Type"), out.String()
+	}
+	// A routed sentinel appended last proves nothing else was delivered before it.
+	sentinel := envelopeFixture(t, "group_quote_mentions")
+	f.appendFrame(t, sentinel, baseTime)
+	end := "data: " + string(compact(sentinel)) + "\n\n"
+	for b := st.next(t); b != end; b = st.next(t) {
+		out.WriteString(b)
 	}
 	return st.res.StatusCode, st.res.Header.Get("Content-Type"), out.String()
 }

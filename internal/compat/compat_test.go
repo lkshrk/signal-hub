@@ -178,11 +178,6 @@ func (f *fixture) appendFrame(t *testing.T, raw []byte, at time.Time) int64 {
 		t.Fatal(err)
 	}
 	consumer, _ := f.router.Route(p)
-	return f.appendFor(t, p, consumer, raw, at)
-}
-
-func (f *fixture) appendFor(t *testing.T, p message.Parsed, consumer string, raw []byte, at time.Time) int64 {
-	t.Helper()
 	seq, dup, err := f.store.Append(context.Background(), store.Entry{Parsed: p, Consumer: consumer, ReceivedAt: at, Raw: raw})
 	if err != nil || dup {
 		t.Fatalf("append: seq=%d dup=%v err=%v", seq, dup, err)

@@ -2,7 +2,7 @@
 
 A consumer with `compat.listen` gets a second listener that serves the subset of the signal-cli HTTP daemon API that the Hermes Signal adapter uses. It is the contract of the `signal-shim` sidecar (agent-stack `cmd/signal-shim` at commit `d9f6594`), so a client switches by changing one URL. The listener has no authentication: the port decides the consumer.
 
-The contract is verified against 23 recordings of the shim's own responses in `internal/compat/testdata/golden`.
+The contract is verified against 23 recordings of the shim's own responses in `internal/compat/testdata/golden`. One of them, `events-direct-receipt`, is a deliberate difference (see below) and is asserted in reverse.
 
 ## Kept contract
 
@@ -37,7 +37,7 @@ The contract is verified against 23 recordings of the shim's own responses in `i
 | `send` reads any local attachment path the process can read | Only paths inside `compat.attachmentDir` are read, resolved with `Clean` and `EvalSymlinks` and opened through an `os.Root`, so `../` and symlinks that leave the directory are refused. Without `attachmentDir` every local path is refused. Relative paths are refused. Every refusal, and any read error, answers exactly like a missing file: `read attachment <name>: open <path>: no such file or directory` |
 | `getAttachment` fetches any id | An id that is unknown or belongs to another consumer answers like an id upstream does not know, without calling upstream: -32603 `GET /v1/attachments/<id> returned HTTP 404: {"error":"No attachment with that name found"}`. This also applies to ids upstream would have rejected as invalid names with HTTP 400 |
 | Events relay the upstream WebSocket and end when it drops | Events come from the log: the stream stays open while upstream is down, carries only the consumer's routed envelopes (messages, edits, reactions, poll votes and typing), and resumes from the server-side position `compat` |
-| Receipts and sync envelopes (`receiptMessage`, `syncMessage` such as `syncMessage.sentMessage` from the owner's linked devices) are relayed | They are stored but never routed to a consumer, so they are not relayed. Neither are envelopes of kind `other`. Only message kinds and typing route by sender, so receipts the owner sends for one consumer's chat never reach another consumer |
+| Receipts and sync envelopes (`receiptMessage`, `syncMessage` such as `syncMessage.sentMessage` from the owner's linked devices) are relayed | They are stored but never routed to a consumer, so they are not relayed. Neither are envelopes of kind `other`. Only message kinds and typing route by sender, so receipts the owner sends for one consumer's chat never reach another consumer. The recording `events-direct-receipt` keeps the shim's behaviour; the hub's test asserts that its receipt frame is not delivered |
 | Missed events while disconnected are lost | Envelopes newer than the consumer's `maxReplayAge` are replayed on reconnect; older ones are skipped, logged as `messages missed` with channel `compat` and counted in `signal_hub_missed_total` |
 | `/api/v1/events` with any account | Another account is 404 `unknown account` |
 | Upstream error texts show the bot number | The bot number is shown as `<account>` in upstream error texts |
