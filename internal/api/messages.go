@@ -88,6 +88,9 @@ func (s *Server) pull(w http.ResponseWriter, r *http.Request) {
 		if len(out.Messages) > 0 || p.wait == 0 {
 			break
 		}
+		if res.More {
+			continue
+		}
 		if s.waiting != nil {
 			s.waiting()
 		}

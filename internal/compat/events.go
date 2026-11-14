@@ -70,7 +70,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rp := &replay.Replayer{Store: s.Store, Router: s.Router, Health: s.Health, Log: s.Log, Now: s.Now}
+	rp := &replay.Replayer{Store: s.Store, Router: s.Router, Health: s.Health, Log: s.Log, Now: s.Now, ScanLimit: s.scanLimit}
 	tick := time.NewTicker(s.keepalive())
 	defer tick.Stop()
 	for {
@@ -103,7 +103,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			}
 			s.Health.Delivered(s.Consumer, store.ChannelCompat, 1)
 		}
-		if len(res.Records) >= eventsBatch {
+		if res.More {
 			continue
 		}
 		if s.waiting != nil {

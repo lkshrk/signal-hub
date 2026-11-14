@@ -24,12 +24,14 @@ type Query struct {
 	Kinds     []string
 	NotBefore time.Time
 	Limit     int
+	ScanLimit int
 }
 
 type Page struct {
 	Records []Record
 	Next    int64
 	Missed  int
+	More    bool
 }
 
 func (s *Store) Read(ctx context.Context, q Query) (Page, error) {
@@ -47,9 +49,13 @@ func (s *Store) Read(ctx context.Context, q Query) (Page, error) {
 
 func readPage(ctx context.Context, db bun.IDB, q Query) (Page, error) {
 	page := Page{Records: []Record{}, Next: q.After}
+	scan := q.ScanLimit
+	if scan <= 0 {
+		scan = maxScan
+	}
 	sel := db.NewSelect().Model((*messageRow)(nil)).
 		Column("seq", "received_at", "kind").
-		Where("seq > ?", q.After).Order("seq").Limit(maxScan)
+		Where("seq > ?", q.After).Order("seq").Limit(int64(scan))
 	if q.Consumer == "" {
 		sel = sel.Where("consumer IS NULL")
 	} else {
@@ -59,8 +65,9 @@ func readPage(ctx context.Context, db bun.IDB, q Query) (Page, error) {
 	if err := sel.Scan(ctx, &rows); err != nil {
 		return Page{}, err
 	}
+	page.More = len(rows) == scan
 	notBefore := q.NotBefore.UnixMilli()
-scan:
+rows:
 	for _, r := range rows {
 		page.Next = r.Seq
 		switch {
@@ -70,7 +77,8 @@ scan:
 		default:
 			page.Records = append(page.Records, Record{Seq: r.Seq, ReceivedAt: time.UnixMilli(r.ReceivedAt).UTC(), Kind: r.Kind})
 			if q.Limit > 0 && len(page.Records) >= q.Limit {
-				break scan
+				page.More = true
+				break rows
 			}
 		}
 	}

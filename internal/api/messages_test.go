@@ -79,6 +79,20 @@ func TestPullNextAdvancesPastSkippedRows(t *testing.T) {
 	}
 }
 
+func TestPullLongPollReadsPastFullScanOfSkippedRows(t *testing.T) {
+	f := newFixture(t)
+	f.srv.scanLimit = 3
+	at := baseTime.Add(-time.Hour)
+	for range 5 {
+		f.append(t, "dsh", "receipt", at)
+	}
+	seq := f.append(t, "dsh", "group_text", at)
+	_, pb, raw := f.pull(t, dshToken, "?after=0&wait=2")
+	if got := seqsOf(t, pb); len(got) != 1 || got[0] != seq || pb.Next != seq {
+		t.Fatalf("pull = %s", raw)
+	}
+}
+
 func TestPullAfterZeroReplaysWithinMaxReplayAge(t *testing.T) {
 	f := newFixture(t)
 	f.append(t, "dsh", "group_text", baseTime.Add(-8*24*time.Hour))

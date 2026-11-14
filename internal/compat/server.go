@@ -29,8 +29,9 @@ type Server struct {
 
 	polls pollStore
 
-	waiting func()
-	exited  func()
+	scanLimit int
+	waiting   func()
+	exited    func()
 }
 
 func (s *Server) Handler() http.Handler {

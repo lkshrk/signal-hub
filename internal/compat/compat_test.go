@@ -490,6 +490,24 @@ func TestEventsSkipOlderThanMaxReplayAge(t *testing.T) {
 	}
 }
 
+func TestEventsReadPastFullScanOfMissedRows(t *testing.T) {
+	f := newFixture(t, fixtureOpts{maxReplayAge: 10 * time.Minute})
+	f.srv.scanLimit = 3
+	for _, name := range []string{"group_hermes_text", "direct_attachment", "poll_vote", "reaction", "edit"} {
+		f.appendFrame(t, envelopeFixture(t, name), baseTime.Add(-20*time.Minute))
+	}
+	fresh := envelopeFixture(t, "group_text")
+	f.appendFrame(t, fresh, baseTime)
+	if err := f.store.SetPosition(context.Background(), "hermes", store.ChannelCompat, 0); err != nil {
+		t.Fatal(err)
+	}
+	st := f.openStream(t, eventsPath)
+	st.next(t)
+	if got := st.next(t); got != "data: "+string(compact(fresh))+"\n\n" {
+		t.Fatalf("block %q", got)
+	}
+}
+
 func TestEventsStayOpenWithoutUpstream(t *testing.T) {
 	f := newFixture(t, fixtureOpts{upstreamURL: "http://127.0.0.1:1"})
 	st := f.openStream(t, eventsPath)

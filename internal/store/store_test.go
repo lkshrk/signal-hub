@@ -182,6 +182,33 @@ func TestReadMissedCountsOnlyRequestedKinds(t *testing.T) {
 	}
 }
 
+func TestReadMoreWhenScanStopsEarly(t *testing.T) {
+	s := openStore(t)
+	now := time.Now()
+	for i := int64(1); i <= 4; i++ {
+		mustAppend(t, s, entry("dsh", message.KindReceipt, i, now))
+	}
+	mustAppend(t, s, entry("dsh", message.KindMessage, 5, now))
+	read := func(q Query) Page {
+		t.Helper()
+		q.Consumer, q.Kinds = "dsh", message.Deliverable
+		p, err := s.Read(context.Background(), q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if p := read(Query{ScanLimit: 3}); len(p.Records) != 0 || p.Next != 3 || !p.More {
+		t.Fatalf("first page = %+v", p)
+	}
+	if p := read(Query{After: 3, ScanLimit: 3}); !equalSeqs(seqs(p), []int64{5}) || p.Next != 5 || p.More {
+		t.Fatalf("last page = %+v", p)
+	}
+	if p := read(Query{Limit: 1}); !equalSeqs(seqs(p), []int64{5}) || !p.More {
+		t.Fatalf("limited page = %+v", p)
+	}
+}
+
 func TestReadLimit(t *testing.T) {
 	s := openStore(t)
 	now := time.Now()

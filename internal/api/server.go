@@ -27,8 +27,9 @@ type Server struct {
 	MaxWait   time.Duration
 	Keepalive time.Duration
 
-	waiting func()
-	exited  func()
+	scanLimit int
+	waiting   func()
+	exited    func()
 }
 
 type PullResponse struct {
@@ -48,7 +49,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) replayer() *replay.Replayer {
-	return &replay.Replayer{Store: s.Store, Router: s.Router, Health: s.Health, Log: s.Log, Now: s.Now}
+	return &replay.Replayer{Store: s.Store, Router: s.Router, Health: s.Health, Log: s.Log, Now: s.Now, ScanLimit: s.scanLimit}
 }
 
 func (s *Server) maxWait() time.Duration {

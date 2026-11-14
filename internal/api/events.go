@@ -135,7 +135,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			}
 			s.Health.Delivered(consumer, store.ChannelEvents, 1)
 		}
-		if len(res.Records) >= eventsBatch {
+		if res.More {
 			continue
 		}
 		if s.waiting != nil {

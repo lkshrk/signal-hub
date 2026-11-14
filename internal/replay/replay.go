@@ -16,6 +16,8 @@ type Replayer struct {
 	Health *health.State
 	Log    *slog.Logger
 	Now    func() time.Time
+
+	ScanLimit int
 }
 
 type Result struct {
@@ -24,6 +26,7 @@ type Result struct {
 	Next    int64
 	Missed  int
 	Reset   bool
+	More    bool
 }
 
 func (r *Replayer) Read(ctx context.Context, consumer, channel string, after int64, kinds []string, limit int) (Result, error) {
@@ -41,7 +44,7 @@ func (r *Replayer) Read(ctx context.Context, consumer, channel string, after int
 		after, res.Reset = oldest, true
 	}
 	res.From = after
-	q := store.Query{Consumer: consumer, After: after, Kinds: kinds, Limit: limit}
+	q := store.Query{Consumer: consumer, After: after, Kinds: kinds, Limit: limit, ScanLimit: r.ScanLimit}
 	var maxAge time.Duration
 	if c, ok := r.Router.Consumer(consumer); ok && c.MaxReplayAge > 0 {
 		maxAge = time.Duration(c.MaxReplayAge)
@@ -51,7 +54,7 @@ func (r *Replayer) Read(ctx context.Context, consumer, channel string, after int
 	if err != nil {
 		return res, err
 	}
-	res.Records, res.Next, res.Missed = page.Records, page.Next, page.Missed
+	res.Records, res.Next, res.Missed, res.More = page.Records, page.Next, page.Missed, page.More
 	if page.Missed > 0 {
 		r.Log.Warn("messages missed", "consumer", consumer, "channel", channel, "count", page.Missed, "maxReplayAge", maxAge)
 		r.Health.Missed(consumer, page.Missed)

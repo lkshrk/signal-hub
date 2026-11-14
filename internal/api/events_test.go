@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -226,6 +227,21 @@ func TestEventsIgnoreOtherConsumersAppend(t *testing.T) {
 	f.append(t, "hermes", "group_hermes_text", baseTime.Add(-time.Minute))
 	awaitParked(t, parked)
 	st.expectNone(t)
+}
+
+func TestEventsReadPastFullScanOfSkippedRows(t *testing.T) {
+	f := newFixture(t)
+	f.srv.scanLimit = 3
+	at := baseTime.Add(-time.Hour)
+	for range 5 {
+		f.append(t, "dsh", "receipt", at)
+	}
+	seq := f.append(t, "dsh", "group_text", at)
+	st := f.openStream(t, dshToken, "?after=0", nil)
+	st.next(t)
+	if got := idLine(st.next(t)); got != fmt.Sprintf("id: %d", seq) {
+		t.Fatalf("got %q", got)
+	}
 }
 
 func TestEventsMissedEvent(t *testing.T) {
