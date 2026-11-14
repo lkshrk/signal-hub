@@ -205,3 +205,27 @@ func TestTransportErrorKeepsCause(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestRedactEmptyAccountIsIdentity(t *testing.T) {
+	c := New("http://x", "")
+	if got := c.Redact("GET /v1/about failed"); got != "GET /v1/about failed" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestRedactCoversEscapedForms(t *testing.T) {
+	c := New("http://x", account)
+	for _, in := range []string{account, "%2B4915112345678", "%2b4915112345678"} {
+		if got := c.Redact("a " + in + " b"); got != "a <account> b" {
+			t.Fatalf("Redact(%q) = %q", in, got)
+		}
+	}
+}
+
+func TestErrorBodyEchoingEscapedAccountIsRedacted(t *testing.T) {
+	c, _ := fake(t, 400, `{"error":"no %2B4915112345678 or %2b4915112345678"}`)
+	_, err := c.Do(context.Background(), "POST", "/v2/send", []byte(`{}`))
+	if err == nil || strings.Contains(strings.ToLower(err.Error()), "4915112345678") {
+		t.Fatalf("err = %v", err)
+	}
+}

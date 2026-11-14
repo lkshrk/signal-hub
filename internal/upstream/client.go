@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -63,9 +64,25 @@ func New(baseURL, account string) *Client {
 		account: account,
 		http:    &http.Client{Timeout: 60 * time.Second},
 		stream:  &http.Client{Timeout: 5 * time.Minute},
-		redact:  strings.NewReplacer(url.PathEscape(account), "<account>", account, "<account>"),
+		redact:  newRedactor(account),
 	}
 }
+
+func newRedactor(account string) *strings.Replacer {
+	if account == "" {
+		return strings.NewReplacer()
+	}
+	forms := []string{url.QueryEscape(account), url.PathEscape(account), account}
+	forms = append(forms, strings.ReplaceAll(forms[0], "%2B", "%2b"))
+	sort.SliceStable(forms, func(i, j int) bool { return len(forms[i]) > len(forms[j]) })
+	var pairs []string
+	for _, f := range forms {
+		pairs = append(pairs, f, "<account>")
+	}
+	return strings.NewReplacer(pairs...)
+}
+
+func (c *Client) Redact(s string) string { return c.redact.Replace(s) }
 
 func (c *Client) Account() string { return c.account }
 
@@ -172,7 +189,7 @@ func (c *Client) roundTrip(ctx context.Context, hc *http.Client, method, path st
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.base+path, rd)
 	if err != nil {
-		return nil, errors.New(c.redact.Replace(err.Error()))
+		return nil, errors.New(c.Redact(err.Error()))
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -183,7 +200,7 @@ func (c *Client) roundTrip(ctx context.Context, hc *http.Client, method, path st
 		if errors.As(err, &ue) {
 			err = ue.Err
 		}
-		return nil, &transportError{msg: c.redact.Replace(fmt.Sprintf("%s %s: %v", method, path, err)), err: err}
+		return nil, &transportError{msg: c.Redact(fmt.Sprintf("%s %s: %v", method, path, err)), err: err}
 	}
 	return res, nil
 }
@@ -199,9 +216,9 @@ func (e *transportError) Unwrap() error { return e.err }
 func (c *Client) statusError(method, path string, status int, body []byte) error {
 	switch {
 	case status == http.StatusTooManyRequests || bytes.Contains(body, []byte("RateLimit")):
-		return &RateLimitError{Msg: c.redact.Replace(fmt.Sprintf("rate limited: %.200s", body))}
+		return &RateLimitError{Msg: c.Redact(fmt.Sprintf("rate limited: %.200s", body))}
 	case status >= 300:
-		return errors.New(c.redact.Replace(fmt.Sprintf("%s %s returned HTTP %d: %.300s", method, path, status, body)))
+		return errors.New(c.Redact(fmt.Sprintf("%s %s returned HTTP %d: %.300s", method, path, status, body)))
 	}
 	return nil
 }
