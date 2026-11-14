@@ -60,7 +60,13 @@ func (s *Server) eventsStart(r *http.Request, consumer string) (int64, error) {
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	consumer := consumerFrom(ctx)
+	if s.exited != nil {
+		defer s.exited()
+	}
 	rc := http.NewResponseController(w)
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		s.Log.Warn("events write deadline", "consumer", consumer, "error", err)
+	}
 	after, err := s.eventsStart(r, consumer)
 	if err != nil {
 		var bad *badStartError
@@ -95,6 +101,13 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		after = res.Next
+		if res.Reset {
+			if err := s.Store.ResetPosition(context.WithoutCancel(ctx), consumer, store.ChannelEvents, res.Next); err != nil {
+				s.Log.Error("events position failed", "consumer", consumer, "error", err)
+				return
+			}
+			s.Health.Position(consumer, store.ChannelEvents, res.Next)
+		}
 		if res.Missed > 0 {
 			if !emit(w, rc, fmt.Sprintf("event: missed\ndata: {\"count\":%d}\n\n", res.Missed)) {
 				return

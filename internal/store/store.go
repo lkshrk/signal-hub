@@ -174,6 +174,19 @@ func (s *Store) SetPosition(ctx context.Context, consumer, channel string, seq i
 	return err
 }
 
+func (s *Store) ResetPosition(ctx context.Context, consumer, channel string, seq int64) error {
+	if seq < 0 {
+		return fmt.Errorf("position %d is negative", seq)
+	}
+	row := positionRow{Consumer: consumer, Channel: channel, Seq: seq, UpdatedAt: time.Now().UnixMilli()}
+	_, err := s.wdb.NewInsert().Model(&row).
+		On("CONFLICT (consumer, channel) DO UPDATE").
+		Set("seq = EXCLUDED.seq").
+		Set("updated_at = EXCLUDED.updated_at").
+		Exec(ctx)
+	return err
+}
+
 func (s *Store) Prune(ctx context.Context, before time.Time) (int64, error) {
 	var total int64
 	cutoff := before.UnixMilli()

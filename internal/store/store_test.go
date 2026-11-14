@@ -221,6 +221,23 @@ func TestPositionOnlyMovesForward(t *testing.T) {
 	}
 }
 
+func TestResetPositionMovesBackwards(t *testing.T) {
+	s := openStore(t)
+	ctx := context.Background()
+	if err := s.SetPosition(ctx, "dsh", ChannelEvents, 999); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ResetPosition(ctx, "dsh", ChannelEvents, 3); err != nil {
+		t.Fatal(err)
+	}
+	if seq, ok, err := s.Position(ctx, "dsh", ChannelEvents); err != nil || !ok || seq != 3 {
+		t.Fatalf("position = %d, %v, %v", seq, ok, err)
+	}
+	if err := s.ResetPosition(ctx, "dsh", ChannelEvents, -1); err == nil {
+		t.Fatal("negative position accepted")
+	}
+}
+
 func attachmentEntry(consumer, kind string, ts int64, at time.Time, id string) Entry {
 	e := entry(consumer, kind, ts, at)
 	e.Parsed.Attachments = []message.AttachmentRef{{ID: id, ContentType: "image/png", Filename: "a.png", Size: 42}}

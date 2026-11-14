@@ -58,6 +58,8 @@ data: {"seq":43,...}
 - A gap over `maxReplayAge` is announced first as `event: missed` with `data: {"count":<n>}`. It is logged and counted like in pull, with channel `events`.
 - `: keepalive` is sent every 25 seconds.
 - The stored position advances only after an event was written and flushed. It never moves backwards.
+- Delivery is at least once: a missed notice or an event can repeat after a failed write.
+- Resume with `Last-Event-ID`: the stored position can be one event ahead of what a dropped client actually received.
 - 400 for a `Last-Event-ID` or `after` that is not a non-negative integer.
 
 ## Attachments

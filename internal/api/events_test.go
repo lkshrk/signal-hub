@@ -90,6 +90,21 @@ func (f *fixture) onWaiting() chan struct{} {
 	return parked
 }
 
+func (f *fixture) onExit() chan struct{} {
+	exited := make(chan struct{}, 16)
+	f.srv.exited = func() { exited <- struct{}{} }
+	return exited
+}
+
+func awaitExit(t *testing.T, exited chan struct{}) {
+	t.Helper()
+	select {
+	case <-exited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("handler never exited")
+	}
+}
+
 func awaitParked(t *testing.T, parked chan struct{}) {
 	t.Helper()
 	select {
@@ -160,7 +175,7 @@ func TestEventsAfterQueryParam(t *testing.T) {
 
 func TestEventsUseServerSidePositionWithoutCursor(t *testing.T) {
 	f := newFixture(t)
-	parked := f.onWaiting()
+	parked, exited := f.onWaiting(), f.onExit()
 	f.append(t, "dsh", "group_text", baseTime.Add(-time.Hour))
 	f.append(t, "dsh", "group_text", baseTime.Add(-time.Hour))
 	st := f.openStream(t, dshToken, "?after=0", nil)
@@ -172,6 +187,7 @@ func TestEventsUseServerSidePositionWithoutCursor(t *testing.T) {
 	}
 	awaitParked(t, parked)
 	st.cancel()
+	awaitExit(t, exited)
 	f.append(t, "dsh", "group_text", baseTime.Add(-time.Hour))
 
 	st = f.openStream(t, dshToken, "", nil)
@@ -307,4 +323,32 @@ func TestEventsEndOnContextCancel(t *testing.T) {
 	if strings.Contains(f.logs.String(), `"level":"ERROR"`) {
 		t.Fatalf("error logged: %s", f.logs.String())
 	}
+}
+
+func TestEventsResetRewindsStoredPosition(t *testing.T) {
+	f := newFixture(t)
+	parked, exited := f.onWaiting(), f.onExit()
+	for range 3 {
+		f.append(t, "dsh", "group_text", baseTime.Add(-time.Hour))
+	}
+	if err := f.store.SetPosition(context.Background(), "dsh", "events", 999); err != nil {
+		t.Fatal(err)
+	}
+	st := f.openStream(t, dshToken, "", nil)
+	st.next(t)
+	for _, want := range []string{"id: 1", "id: 2", "id: 3"} {
+		if got := idLine(st.next(t)); got != want {
+			t.Fatalf("got %q want %q", got, want)
+		}
+	}
+	awaitParked(t, parked)
+	if pos, _, _ := f.store.Position(context.Background(), "dsh", "events"); pos != 3 {
+		t.Fatalf("pos = %d", pos)
+	}
+	st.cancel()
+	awaitExit(t, exited)
+	st = f.openStream(t, dshToken, "", nil)
+	st.next(t)
+	awaitParked(t, parked)
+	st.expectNone(t)
 }

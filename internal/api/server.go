@@ -28,6 +28,7 @@ type Server struct {
 	Keepalive time.Duration
 
 	waiting func()
+	exited  func()
 }
 
 type PullResponse struct {
