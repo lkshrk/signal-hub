@@ -42,6 +42,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/messages", s.pull)
 	mux.HandleFunc("GET /v1/events", s.events)
+	mux.HandleFunc("POST /v1/send", s.send)
 	mux.HandleFunc("GET /v1/attachments/{id}", s.attachment)
 	return s.authenticate(mux)
 }

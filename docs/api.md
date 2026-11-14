@@ -62,6 +62,52 @@ data: {"seq":43,...}
 - Resume with `Last-Event-ID`: the stored position can be one event ahead of what a dropped client actually received.
 - 400 for a `Last-Event-ID` or `after` that is not a non-negative integer.
 
+## Send
+
+`POST /v1/send`
+
+The body is at most `limits.maxRequestBytes`, else 413 `{"error":"request body exceeds <n> bytes"}`. Nothing is forwarded in that case.
+
+```json
+{
+  "recipient": "group.QUFF... | <internal id> | +49... | <uuid>",
+  "text": "Done: PR #12",
+  "quote": {"timestamp": 1763114300000, "author": "+4915187654321", "text": "optional"},
+  "mentions": [{"start": 0, "length": 1, "author": "<uuid or number>"}],
+  "styles": [{"start": 0, "length": 4, "style": "BOLD"}],
+  "attachments": [{"contentType": "image/png", "filename": "a.png", "data": "<base64>"}],
+  "poll": {"question": "Merge?", "options": ["yes", "no"], "allowMultiple": false}
+}
+```
+
+Response 200:
+
+```json
+{"timestamp": 1761245000123, "timestamps": [1761245000123], "failures": [{"number": "+492", "uuid": "", "reason": "UNREGISTERED"}]}
+```
+
+`failures` is omitted when empty.
+
+Rules:
+
+- One recipient, either the internal id or the REST form of a group, or a sender, and it must belong to the consumer.
+- At least one of `text`, `attachments` or `poll`.
+- `poll` excludes every other content field. It needs a non-empty question and at least two non-empty options.
+- `mentions` and `styles` cannot be combined.
+- Styles are `BOLD`, `ITALIC`, `STRIKETHROUGH`, `MONOSPACE` or `SPOILER`, with UTF-16 offsets inside the text. A range the styled parser cannot express is sent unstyled.
+- `quote.author` is required with `quote`.
+- `attachments[].data` must be valid base64.
+
+Errors:
+
+| Status | Error |
+|--------|-------|
+| 400 | `invalid JSON body`, `recipient required`, or the violated rule, for example `mentions and styles cannot be combined` |
+| 403 | `recipient not allowed` (counted as `signal_hub_sends_total{result="denied"}`) |
+| 413 | `request body exceeds <n> bytes` |
+| 429 | `rate limited`, when signal-cli-rest-api rate-limits |
+| 502 | `upstream error`, for any other upstream failure |
+
 ## Attachments
 
 `GET /v1/attachments/{id}`
