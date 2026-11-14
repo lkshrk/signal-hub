@@ -1,0 +1,16 @@
+{
+  "name": "events-group-text",
+  "kind": "events",
+  "path": "/api/v1/events?account=%2B4915112345678",
+  "upstreamReply": {
+    "status": 204,
+    "body": ""
+  },
+  "frames": [
+    "{\"envelope\":{\"source\":\"+4915187654321\",\"sourceNumber\":\"+4915187654321\",\"sourceUuid\":\"0b6a4f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b\",\"sourceName\":\"Owner\",\"sourceDevice\":1,\"timestamp\":1763114500000,\"serverReceivedTimestamp\":1763114500100,\"dataMessage\":{\"timestamp\":1763114500000,\"message\":\"please fix the build\",\"expiresInSeconds\":0,\"viewOnce\":false,\"groupInfo\":{\"groupId\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"groupName\":\"hermes\",\"revision\":3,\"type\":\"DELIVER\"}}},\"account\":\"+4915112345678\"}"
+  ],
+  "status": 200,
+  "contentType": "text/event-stream",
+  "response": ": connected\n\ndata: {\"envelope\":{\"source\":\"+4915187654321\",\"sourceNumber\":\"+4915187654321\",\"sourceUuid\":\"0b6a4f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b\",\"sourceName\":\"Owner\",\"sourceDevice\":1,\"timestamp\":1763114500000,\"serverReceivedTimestamp\":1763114500100,\"dataMessage\":{\"timestamp\":1763114500000,\"message\":\"please fix the build\",\"expiresInSeconds\":0,\"viewOnce\":false,\"groupInfo\":{\"groupId\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"groupName\":\"hermes\",\"revision\":3,\"type\":\"DELIVER\"}}},\"account\":\"+4915112345678\"}\n\n",
+  "upstream": []
+}

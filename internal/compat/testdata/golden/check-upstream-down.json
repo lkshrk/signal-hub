@@ -1,0 +1,18 @@
+{
+  "name": "check-upstream-down",
+  "kind": "check",
+  "path": "/api/v1/check",
+  "upstreamReply": {
+    "status": 503,
+    "body": "upstream unavailable"
+  },
+  "status": 502,
+  "contentType": "text/plain; charset=utf-8",
+  "response": "GET /v1/about returned HTTP 503: upstream unavailable\n",
+  "upstream": [
+    {
+      "method": "GET",
+      "path": "/v1/about"
+    }
+  ]
+}

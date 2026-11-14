@@ -1,0 +1,38 @@
+{
+  "name": "rpc-reaction-remove",
+  "kind": "rpc",
+  "request": {
+    "id": "x",
+    "jsonrpc": "2.0",
+    "method": "sendReaction",
+    "params": {
+      "account": "+4915112345678",
+      "emoji": "👍",
+      "recipient": [
+        "+4915187654321"
+      ],
+      "remove": true,
+      "targetAuthor": "+4915187654321",
+      "targetTimestamp": 1763114500000
+    }
+  },
+  "upstreamReply": {
+    "status": 204,
+    "body": ""
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "response": "{\"id\":\"x\",\"jsonrpc\":\"2.0\",\"result\":{}}\n",
+  "upstream": [
+    {
+      "method": "DELETE",
+      "path": "/v1/reactions/+4915112345678",
+      "body": {
+        "reaction": "👍",
+        "recipient": "+4915187654321",
+        "target_author": "+4915187654321",
+        "timestamp": 1763114500000
+      }
+    }
+  ]
+}

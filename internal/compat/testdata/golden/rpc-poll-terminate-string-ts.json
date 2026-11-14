@@ -1,0 +1,31 @@
+{
+  "name": "rpc-poll-terminate-string-ts",
+  "kind": "rpc",
+  "request": {
+    "id": "x",
+    "jsonrpc": "2.0",
+    "method": "sendPollTerminate",
+    "params": {
+      "account": "+4915112345678",
+      "groupId": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "pollTimestamp": "1763114850000"
+    }
+  },
+  "upstreamReply": {
+    "status": 204,
+    "body": ""
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "response": "{\"id\":\"x\",\"jsonrpc\":\"2.0\",\"result\":{}}\n",
+  "upstream": [
+    {
+      "method": "DELETE",
+      "path": "/v1/polls/+4915112345678",
+      "body": {
+        "poll_timestamp": "1763114850000",
+        "recipient": "group.QUFFQ0F3UUZCZ2NJQ1FvTERBME9EeEFSRWhNVUZSWVhHQmthR3h3ZEhoOD0="
+      }
+    }
+  ]
+}

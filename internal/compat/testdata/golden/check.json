@@ -1,0 +1,18 @@
+{
+  "name": "check",
+  "kind": "check",
+  "path": "/api/v1/check",
+  "upstreamReply": {
+    "status": 200,
+    "body": "{\"build\":2,\"capabilities\":{\"v2/send\":[\"quotes\",\"mentions\"]},\"mode\":\"json-rpc\",\"version\":\"0.101\",\"versions\":[\"v1\",\"v2\"]}"
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "response": "{\"versions\":{\"signal-cli\":\"via signal-cli-rest-api\"},\"upstream\":{\"build\":2,\"capabilities\":{\"v2/send\":[\"quotes\",\"mentions\"]},\"mode\":\"json-rpc\",\"version\":\"0.101\",\"versions\":[\"v1\",\"v2\"]}}",
+  "upstream": [
+    {
+      "method": "GET",
+      "path": "/v1/about"
+    }
+  ]
+}

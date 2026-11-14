@@ -1,0 +1,12 @@
+.git
+.github
+.superpowers
+.golangci.yml
+.mise.toml
+lefthook.yml
+renovate.json5
+docs
+examples
+*.md
+*.db*
+/signal-hub

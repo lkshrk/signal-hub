@@ -1,0 +1,21 @@
+{
+  "name": "rpc-get-contact",
+  "kind": "rpc",
+  "request": {
+    "id": "x",
+    "jsonrpc": "2.0",
+    "method": "getContact",
+    "params": {
+      "account": "+4915112345678",
+      "recipient": "+4915187654321"
+    }
+  },
+  "upstreamReply": {
+    "status": 204,
+    "body": ""
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "response": "{\"id\":\"x\",\"jsonrpc\":\"2.0\",\"result\":{}}\n",
+  "upstream": []
+}

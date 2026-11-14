@@ -1,0 +1,33 @@
+{
+  "name": "events-poll-vote-known",
+  "kind": "events",
+  "path": "/api/v1/events?account=%2B4915112345678",
+  "upstreamReply": {
+    "status": 201,
+    "body": "{\"timestamp\":\"1763114850000\"}"
+  },
+  "setup": [
+    {
+      "id": "x",
+      "jsonrpc": "2.0",
+      "method": "sendPollCreate",
+      "params": {
+        "account": "+4915112345678",
+        "groupId": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+        "options": [
+          "✅ Start",
+          "⏸️ Later",
+          "❌ Cancel"
+        ],
+        "question": "Start now?"
+      }
+    }
+  ],
+  "frames": [
+    "{\"envelope\":{\"source\":\"+4915187654321\",\"sourceNumber\":\"+4915187654321\",\"sourceUuid\":\"0b6a4f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b\",\"sourceName\":\"Owner\",\"sourceDevice\":1,\"timestamp\":1763114900000,\"serverReceivedTimestamp\":1763114900100,\"dataMessage\":{\"timestamp\":1763114900000,\"expiresInSeconds\":0,\"viewOnce\":false,\"pollVote\":{\"authorNumber\":\"+4915187654321\",\"authorUuid\":\"0b6a4f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b\",\"targetSentTimestamp\":1763114850000,\"optionIndexes\":[0,2],\"voteCount\":1},\"groupInfo\":{\"groupId\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"groupName\":\"hermes\",\"revision\":3,\"type\":\"DELIVER\"}}},\"account\":\"+4915112345678\"}"
+  ],
+  "status": 200,
+  "contentType": "text/event-stream",
+  "response": ": connected\n\ndata: {\"account\":\"+4915112345678\",\"envelope\":{\"dataMessage\":{\"expiresInSeconds\":0,\"groupInfo\":{\"groupId\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"groupName\":\"hermes\",\"revision\":3,\"type\":\"DELIVER\"},\"message\":\"🗳️ Poll \\\"Start now?\\\": ✅ Start, ❌ Cancel (poll 1763114850000)\",\"pollVote\":{\"authorNumber\":\"+4915187654321\",\"authorUuid\":\"0b6a4f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b\",\"optionIndexes\":[0,2],\"targetSentTimestamp\":1763114850000,\"voteCount\":1},\"timestamp\":1763114900000,\"viewOnce\":false},\"serverReceivedTimestamp\":1763114900100,\"source\":\"+4915187654321\",\"sourceDevice\":1,\"sourceName\":\"Owner\",\"sourceNumber\":\"+4915187654321\",\"sourceUuid\":\"0b6a4f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b\",\"timestamp\":1763114900000}}\n\n",
+  "upstream": []
+}

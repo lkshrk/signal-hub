@@ -1,0 +1,42 @@
+{
+  "name": "rpc-send-recipients-styles",
+  "kind": "rpc",
+  "request": {
+    "id": "x",
+    "jsonrpc": "2.0",
+    "method": "send",
+    "params": {
+      "account": "+4915112345678",
+      "message": "Hello world, all done",
+      "recipient": [
+        "+4915187654321"
+      ],
+      "textStyle": [
+        "0:5:BOLD",
+        "6:5:ITALIC"
+      ],
+      "textStyles": "12:3:MONOSPACE"
+    }
+  },
+  "upstreamReply": {
+    "status": 201,
+    "body": "[{\"timestamp\":\"1761245000123\"}]"
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "response": "{\"id\":\"x\",\"jsonrpc\":\"2.0\",\"result\":{\"results\":[{\"type\":\"SUCCESS\"}],\"timestamp\":1761245000123}}\n",
+  "upstream": [
+    {
+      "method": "POST",
+      "path": "/v2/send",
+      "body": {
+        "message": "**Hello** *world*,` al`l done",
+        "number": "+4915112345678",
+        "recipients": [
+          "+4915187654321"
+        ],
+        "text_mode": "styled"
+      }
+    }
+  ]
+}

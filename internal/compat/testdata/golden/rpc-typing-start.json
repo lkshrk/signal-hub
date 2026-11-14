@@ -1,0 +1,29 @@
+{
+  "name": "rpc-typing-start",
+  "kind": "rpc",
+  "request": {
+    "id": "x",
+    "jsonrpc": "2.0",
+    "method": "sendTyping",
+    "params": {
+      "account": "+4915112345678",
+      "groupId": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+    }
+  },
+  "upstreamReply": {
+    "status": 204,
+    "body": ""
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "response": "{\"id\":\"x\",\"jsonrpc\":\"2.0\",\"result\":{}}\n",
+  "upstream": [
+    {
+      "method": "PUT",
+      "path": "/v1/typing-indicator/+4915112345678",
+      "body": {
+        "recipient": "group.QUFFQ0F3UUZCZ2NJQ1FvTERBME9EeEFSRWhNVUZSWVhHQmthR3h3ZEhoOD0="
+      }
+    }
+  ]
+}

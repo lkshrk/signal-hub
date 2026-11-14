@@ -36,8 +36,3 @@ func Normalize(id string) (string, error) {
 func REST(internal string) string {
 	return restPrefix + base64.StdEncoding.EncodeToString([]byte(internal))
 }
-
-func IsGroup(recipient string) bool {
-	_, err := Normalize(recipient)
-	return err == nil
-}

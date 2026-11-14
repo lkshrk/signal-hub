@@ -1,0 +1,39 @@
+{
+  "name": "rpc-send-quote",
+  "kind": "rpc",
+  "request": {
+    "id": "x",
+    "jsonrpc": "2.0",
+    "method": "send",
+    "params": {
+      "account": "+4915112345678",
+      "groupId": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "message": "on it",
+      "quoteAuthor": "+4915187654321",
+      "quoteMessage": "please fix the build",
+      "quoteTimestamp": 1763114500000
+    }
+  },
+  "upstreamReply": {
+    "status": 201,
+    "body": "[{\"timestamp\":\"1761245000123\"}]"
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "response": "{\"id\":\"x\",\"jsonrpc\":\"2.0\",\"result\":{\"results\":[{\"type\":\"SUCCESS\"}],\"timestamp\":1761245000123}}\n",
+  "upstream": [
+    {
+      "method": "POST",
+      "path": "/v2/send",
+      "body": {
+        "message": "on it",
+        "number": "+4915112345678",
+        "quote_author": "+4915187654321",
+        "quote_timestamp": 1763114500000,
+        "recipients": [
+          "group.QUFFQ0F3UUZCZ2NJQ1FvTERBME9EeEFSRWhNVUZSWVhHQmthR3h3ZEhoOD0="
+        ]
+      }
+    }
+  ]
+}
