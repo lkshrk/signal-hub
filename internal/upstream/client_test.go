@@ -95,6 +95,15 @@ func TestRateLimitByStatusAndBody(t *testing.T) {
 	}
 }
 
+func TestRateLimitTextInSuccessBodyIsData(t *testing.T) {
+	body := "binary\x00RateLimit\x01data"
+	c, _ := fake(t, 200, body)
+	out, err := c.Do(context.Background(), "GET", "/v1/attachments/a1", nil)
+	if err != nil || string(out) != body {
+		t.Fatalf("Do = %q, %v", out, err)
+	}
+}
+
 func TestHTTPErrorFormat(t *testing.T) {
 	c, _ := fake(t, 400, `{"error":"bad"}`)
 	_, err := c.Do(context.Background(), "POST", "/v2/send", []byte(`{}`))

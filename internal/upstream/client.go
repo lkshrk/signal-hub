@@ -215,7 +215,7 @@ func (e *transportError) Unwrap() error { return e.err }
 
 func (c *Client) statusError(method, path string, status int, body []byte) error {
 	switch {
-	case status == http.StatusTooManyRequests || bytes.Contains(body, []byte("RateLimit")):
+	case status == http.StatusTooManyRequests || status >= 300 && bytes.Contains(body, []byte("RateLimit")):
 		return &RateLimitError{Msg: c.Redact(fmt.Sprintf("rate limited: %.200s", body))}
 	case status >= 300:
 		return errors.New(c.Redact(fmt.Sprintf("%s %s returned HTTP %d: %.300s", method, path, status, body)))
