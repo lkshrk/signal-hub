@@ -21,6 +21,10 @@ var version = "dev"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
 	code := run(os.Args[1:], os.Getenv, os.Stdout, os.Stderr, ctx)
 	stop()
 	os.Exit(code)

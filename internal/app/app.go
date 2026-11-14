@@ -125,7 +125,7 @@ func (a *App) Run(ctx context.Context) error {
 		})
 	}
 
-	// Not derived from ctx, so an append still being retried can land before the store closes.
+	// Outlives the servers so in-flight appends can finish.
 	ingestCtx, cancelIngest := context.WithCancel(context.Background())
 	defer cancelIngest()
 	ing := &ingest.Ingester{
