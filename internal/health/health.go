@@ -84,38 +84,41 @@ func (s *State) SetReady(ready bool) {
 
 func (s *State) UpstreamConnected(connected bool) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if connected && !s.connected {
-		s.connectedSince = s.now()
+		s.connectedSince = s.now().UTC().Truncate(time.Second)
 	}
 	s.connected = connected
-	s.mu.Unlock()
 	s.m.connected.Set(boolFloat(connected))
 }
 
 func (s *State) Reconnected() {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.reconnects++
-	s.mu.Unlock()
 	s.m.reconnects.Inc()
 }
 
 func (s *State) StoreResult(err error) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.storeWritable = err == nil
 	s.storeErr = ""
 	if err != nil {
 		s.storeErr = err.Error()
 	}
-	s.mu.Unlock()
 	s.m.storeWritable.Set(boolFloat(err == nil))
 }
 
 func (s *State) MessageStored(kind string, at time.Time) {
+	at = at.UTC().Truncate(time.Second)
 	s.mu.Lock()
-	s.lastMessage = at
-	s.mu.Unlock()
+	defer s.mu.Unlock()
 	s.m.envelopes.WithLabelValues(kind).Inc()
-	s.m.lastMessage.Set(float64(at.Unix()))
+	if at.After(s.lastMessage) {
+		s.lastMessage = at
+		s.m.lastMessage.Set(float64(at.Unix()))
+	}
 }
 
 func (s *State) Duplicate() { s.m.duplicates.Inc() }
@@ -124,8 +127,8 @@ func (s *State) Rejected() { s.m.rejected.Inc() }
 
 func (s *State) Unclaimed() {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.unclaimed++
-	s.mu.Unlock()
 	s.m.unclaimed.Inc()
 }
 
@@ -134,8 +137,8 @@ func (s *State) Missed(consumer string, n int) {
 		return
 	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.missed[consumer] += int64(n)
-	s.mu.Unlock()
 	s.m.missed.WithLabelValues(consumer).Add(float64(n))
 }
 
@@ -152,8 +155,8 @@ func (s *State) Sent(consumer, result string) {
 
 func (s *State) Position(consumer, channel string, seq int64) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.channel(consumer, channel).Position = seq
-	s.mu.Unlock()
 	s.m.position.WithLabelValues(consumer, channel).Set(float64(seq))
 }
 
