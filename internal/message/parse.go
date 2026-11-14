@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/lkshrk/signal-hub/internal/groupid"
 )
@@ -59,7 +60,6 @@ type envelope struct {
 }
 
 type dataMessage struct {
-	Timestamp   int64        `json:"timestamp"`
 	Message     string       `json:"message"`
 	Mentions    []mention    `json:"mentions"`
 	Quote       *quote       `json:"quote"`
@@ -123,8 +123,11 @@ type pollVote struct {
 
 func decode(raw []byte) (*envelope, error) {
 	var f frame
-	if err := json.Unmarshal(raw, &f); err != nil || f.Envelope == nil {
-		return nil, fmt.Errorf("%w", ErrNoEnvelope)
+	if err := json.Unmarshal(raw, &f); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrNoEnvelope, err)
+	}
+	if f.Envelope == nil {
+		return nil, ErrNoEnvelope
 	}
 	return f.Envelope, nil
 }
@@ -154,6 +157,13 @@ func (e *envelope) content() *dataMessage {
 		return e.EditMessage.DataMessage
 	}
 	return e.DataMessage
+}
+
+func (e *envelope) sourceNumber() string {
+	if e.SourceNumber == "" && strings.HasPrefix(e.Source, "+") {
+		return e.Source
+	}
+	return e.SourceNumber
 }
 
 func (e *envelope) source() string {
@@ -193,7 +203,7 @@ func Parse(raw []byte) (Parsed, error) {
 		Kind:         e.kind(),
 		SignalTS:     e.Timestamp,
 		Source:       e.source(),
-		SourceNumber: e.SourceNumber,
+		SourceNumber: e.sourceNumber(),
 		SourceUUID:   e.SourceUUID,
 		GroupID:      gid,
 	}

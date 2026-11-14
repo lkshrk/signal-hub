@@ -11,8 +11,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/lkshrk/signal-hub/internal/groupid"
 )
 
 const (
@@ -21,6 +19,7 @@ const (
 	unknownID = "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8="
 	ownerUUID = "0b6a4f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b"
 	botNumber = "+4915112345678"
+	restA     = "group.QUFFQ0F3UUZCZ2NJQ1FvTERBME9EeEFSRWhNVUZSWVhHQmthR3h3ZEhoOD0="
 	botUUID   = "9f8e7d6c-5b4a-4321-8fed-cba987654321"
 )
 
@@ -153,7 +152,7 @@ func TestBuildGroupQuoteMentions(t *testing.T) {
 	if m.Seq != 7 || m.Kind != KindMessage || m.Timestamp != 1763114400000 || !m.ReceivedAt.Equal(at) {
 		t.Fatalf("got %+v", m)
 	}
-	wantGroup := &Group{ID: internalA, InternalID: internalA, RESTID: groupid.REST(internalA), Name: "dsh"}
+	wantGroup := &Group{ID: internalA, InternalID: internalA, RESTID: restA, Name: "dsh"}
 	if !reflect.DeepEqual(m.Group, wantGroup) {
 		t.Fatalf("group = %+v", m.Group)
 	}
@@ -337,7 +336,7 @@ func TestBuildTypingGroupHasGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Kind != KindTyping || m.Group == nil || m.Group.ID != internalA || m.Group.RESTID != groupid.REST(internalA) {
+	if m.Kind != KindTyping || m.Group == nil || m.Group.ID != internalA || m.Group.RESTID != restA {
 		t.Fatalf("got %+v", m)
 	}
 }
@@ -358,5 +357,26 @@ func TestDeliverable(t *testing.T) {
 	want := []string{KindMessage, KindEdit, KindReaction, KindPollVote}
 	if !reflect.DeepEqual(Deliverable, want) {
 		t.Fatalf("got %v", Deliverable)
+	}
+}
+
+func TestParseWrongTypeKeepsJSONCause(t *testing.T) {
+	_, err := Parse([]byte(`{"envelope":{"timestamp":"soon"}}`))
+	if !errors.Is(err, ErrNoEnvelope) {
+		t.Fatalf("err = %v", err)
+	}
+	var ute *json.UnmarshalTypeError
+	if !errors.As(err, &ute) || !strings.Contains(err.Error(), "timestamp") {
+		t.Fatalf("cause lost: %v", err)
+	}
+}
+
+func TestParseSourceNumberFromPlainSource(t *testing.T) {
+	p, err := Parse([]byte(`{"envelope":{"source":"+4915187654321","timestamp":5}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.SourceNumber != "+4915187654321" || p.Source != "+4915187654321" {
+		t.Fatalf("got %+v", p)
 	}
 }

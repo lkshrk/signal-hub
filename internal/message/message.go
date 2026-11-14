@@ -105,13 +105,10 @@ func Build(seq int64, receivedAt time.Time, raw []byte) (Message, error) {
 		ReceivedAt:  receivedAt,
 		Timestamp:   e.Timestamp,
 		Kind:        e.kind(),
-		Sender:      Sender{Number: e.SourceNumber, UUID: e.SourceUUID, Name: e.SourceName, Device: e.SourceDevice},
+		Sender:      Sender{Number: e.sourceNumber(), UUID: e.SourceUUID, Name: e.SourceName, Device: e.SourceDevice},
 		Mentions:    []Mention{},
 		Attachments: []Attachment{},
 		Raw:         append(json.RawMessage(nil), raw...),
-	}
-	if m.Sender.Number == "" && strings.HasPrefix(e.Source, "+") {
-		m.Sender.Number = e.Source
 	}
 	if id, name := e.groupID(); id != "" {
 		m.Group = &Group{ID: id, InternalID: id, RESTID: groupid.REST(id), Name: name}
