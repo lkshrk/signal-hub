@@ -1,0 +1,23 @@
+version: 1
+upstream:
+  url: http://signal-rest-api.tools.svc.cluster.local
+  accountFile: /etc/signal-hub/account
+listen: ":8080"
+adminListen: ":9090"
+database: /var/lib/signal-hub/hub.db
+retention: 14d
+tokenDir: /etc/signal-hub/tokens
+limits:
+  maxRequestBytes: 26214400
+consumers:
+  - name: dsh
+    groups:
+      - group.QUFFQ0F3UUZCZ2NJQ1FvTERBME9EeEFSRWhNVUZSWVhHQmthR3h3ZEhoOD0=
+    maxReplayAge: 7d
+  - name: hermes
+    groups:
+      - ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=
+    senders: ["+4915187654321"]
+    maxReplayAge: 10m
+    compat:
+      listen: ":8091"
