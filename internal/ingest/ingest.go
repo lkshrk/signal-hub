@@ -17,7 +17,7 @@ import (
 
 const (
 	readLimit     = 64 << 20
-	frameBuffer   = 256
+	frameBuffer   = 16
 	appendInitial = 100 * time.Millisecond
 	appendMax     = 5 * time.Second
 )
@@ -39,6 +39,7 @@ type Ingester struct {
 	Redact       func(string) string
 	PingInterval time.Duration
 	PingTimeout  time.Duration
+	DialTimeout  time.Duration
 }
 
 func (i *Ingester) applyDefaults() {
@@ -63,6 +64,9 @@ func (i *Ingester) applyDefaults() {
 	if i.PingInterval <= 0 {
 		i.PingInterval = 30 * time.Second
 	}
+	if i.DialTimeout <= 0 {
+		i.DialTimeout = 30 * time.Second
+	}
 	if i.PingTimeout <= 0 {
 		i.PingTimeout = 10 * time.Second
 	}
@@ -84,7 +88,9 @@ func (i *Ingester) Run(ctx context.Context) error {
 	attempt := 0
 	connectedOnce := false
 	for ctx.Err() == nil {
-		conn, resp, err := websocket.Dial(ctx, i.URL, nil)
+		dialCtx, dialCancel := context.WithTimeout(ctx, i.DialTimeout)
+		conn, resp, err := websocket.Dial(dialCtx, i.URL, nil)
+		dialCancel()
 		if resp != nil && resp.Body != nil {
 			_ = resp.Body.Close()
 		}
@@ -158,6 +164,7 @@ func (i *Ingester) session(ctx context.Context, conn *websocket.Conn) error {
 			_, data, err := conn.Read(sessCtx)
 			if err != nil {
 				fail(err)
+				i.Health.UpstreamConnected(false)
 				return
 			}
 			select {
@@ -185,6 +192,7 @@ func (i *Ingester) session(ctx context.Context, conn *websocket.Conn) error {
 				pcancel()
 				if err != nil {
 					fail(err)
+					i.Health.UpstreamConnected(false)
 					_ = conn.CloseNow()
 					return
 				}
@@ -248,12 +256,12 @@ func (i *Ingester) appendDurably(ctx context.Context, e store.Entry) (seq int64,
 	delay := appendInitial
 	for n := 1; ; n++ {
 		seq, dup, err := i.Store.Append(ctx, e)
+		if err != nil && ctx.Err() != nil {
+			return 0, false, false
+		}
 		i.Health.StoreResult(err)
 		if err == nil {
 			return seq, dup, true
-		}
-		if ctx.Err() != nil {
-			return 0, false, false
 		}
 		i.Log.Error("store append failed", "attempt", n, "error", err)
 		if i.Sleep(ctx, delay) != nil {

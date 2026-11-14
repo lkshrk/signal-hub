@@ -19,6 +19,7 @@ type Server struct {
 	cancel   context.CancelFunc
 	sessions []Session
 	dials    atomic.Int64
+	stall    atomic.Int64
 	closed   chan websocket.StatusCode
 	wg       sync.WaitGroup
 }
@@ -31,14 +32,18 @@ func New(t testing.TB, sessions ...Session) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{cancel: cancel, sessions: sessions, closed: make(chan websocket.StatusCode, 64)}
 	s.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.wg.Add(1)
+		defer s.wg.Done()
+		n := int(s.dials.Add(1)) - 1
+		if s.stall.Add(-1) >= 0 {
+			<-ctx.Done()
+			return
+		}
 		c, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			return
 		}
-		s.wg.Add(1)
-		defer s.wg.Done()
 		defer func() { _ = c.CloseNow() }()
-		n := int(s.dials.Add(1)) - 1
 		sess := s.sessions[min(n, len(s.sessions)-1)]
 		sess(ctx, c, s)
 	}))
@@ -47,6 +52,8 @@ func New(t testing.TB, sessions ...Session) *Server {
 }
 
 func (s *Server) URL() string { return "ws" + strings.TrimPrefix(s.srv.URL, "http") }
+
+func (s *Server) StallUpgrades(n int) { s.stall.Store(int64(n)) }
 
 func (s *Server) Dials() int { return int(s.dials.Load()) }
 

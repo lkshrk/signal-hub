@@ -75,8 +75,8 @@ type rig struct {
 	logs   *syncBuf
 	clock  *clock
 
-	mu     sync.Mutex
-	sleeps []time.Duration
+	mu        sync.Mutex
+	sleeps    []time.Duration
 	stopAfter int
 	cancel    context.CancelFunc
 }
@@ -546,4 +546,64 @@ func TestIngestNeverLogsBotNumber(t *testing.T) {
 		}
 		assertClean(t, logs)
 	})
+}
+
+func TestIngestDialTimeoutRetries(t *testing.T) {
+	srv := testupstream.New(t)
+	srv.StallUpgrades(1)
+	r := newRig(t, srv.URL())
+	r.ing.DialTimeout = 50 * time.Millisecond
+	r.start(t)
+	eventually(t, "second dial", func() bool { return srv.Dials() >= 2 })
+	r.waitConnected(t)
+	if got := r.recorded(); len(got) == 0 || got[0] != time.Second {
+		t.Fatalf("sleeps = %v, want first 1s", got)
+	}
+}
+
+func TestIngestMarksDisconnectedWhileStoreIsDown(t *testing.T) {
+	f := frame(t, "group_text")
+	frames := make([][]byte, 3*frameBuffer)
+	for i := range frames {
+		frames[i] = f
+	}
+	srv := testupstream.New(t, testupstream.Seq(testupstream.Write(frames...), testupstream.Stall))
+	r := newRig(t, srv.URL())
+	fs := &flakyStore{inner: r.store}
+	fs.failing.Store(true)
+	r.ing.Store = fs
+	r.ing.PingInterval = 50 * time.Millisecond
+	r.ing.PingTimeout = 50 * time.Millisecond
+	r.start(t)
+
+	r.waitConnected(t)
+	eventually(t, "upstream marked disconnected", func() bool { return !r.health.Snapshot().Upstream.Connected })
+	if code := r.healthz(t); code != http.StatusServiceUnavailable {
+		t.Errorf("healthz = %d, want 503", code)
+	}
+	if h, _ := r.store.Head(context.Background()); h != 0 {
+		t.Errorf("head = %d while store is down", h)
+	}
+}
+
+func TestIngestCancelDoesNotMarkStoreUnwritable(t *testing.T) {
+	srv := testupstream.New(t, testupstream.Seq(testupstream.Write(frame(t, "group_text")), testupstream.Hold))
+	r := newRig(t, srv.URL())
+	r.ing.Store = blockingStore{}
+	cancel, done := r.start(t)
+	r.waitConnected(t)
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("Run = %v", err)
+	}
+	if got := r.health.Snapshot().Store.Error; got != "" {
+		t.Errorf("store error after cancel = %q", got)
+	}
+}
+
+type blockingStore struct{}
+
+func (blockingStore) Append(ctx context.Context, _ store.Entry) (int64, bool, error) {
+	<-ctx.Done()
+	return 0, false, ctx.Err()
 }
