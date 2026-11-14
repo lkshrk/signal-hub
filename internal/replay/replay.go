@@ -20,6 +20,7 @@ type Replayer struct {
 
 type Result struct {
 	Records []store.Record
+	From    int64
 	Next    int64
 	Missed  int
 	Reset   bool
@@ -39,6 +40,7 @@ func (r *Replayer) Read(ctx context.Context, consumer, channel string, after int
 		r.Log.Warn("cursor ahead of log", "consumer", consumer, "channel", channel, "after", after, "head", head)
 		after, res.Reset = oldest, true
 	}
+	res.From = after
 	q := store.Query{Consumer: consumer, After: after, Kinds: kinds, Limit: limit}
 	var maxAge time.Duration
 	if c, ok := r.Router.Consumer(consumer); ok && c.MaxReplayAge > 0 {

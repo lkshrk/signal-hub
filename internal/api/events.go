@@ -102,11 +102,11 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		}
 		after = res.Next
 		if res.Reset {
-			if err := s.Store.ResetPosition(context.WithoutCancel(ctx), consumer, store.ChannelEvents, res.Next); err != nil {
+			if err := s.Store.ResetPosition(context.WithoutCancel(ctx), consumer, store.ChannelEvents, res.From); err != nil {
 				s.Log.Error("events position failed", "consumer", consumer, "error", err)
 				return
 			}
-			s.Health.Position(consumer, store.ChannelEvents, res.Next)
+			s.Health.Position(consumer, store.ChannelEvents, res.From)
 		}
 		if res.Missed > 0 {
 			if !emit(w, rc, fmt.Sprintf("event: missed\ndata: {\"count\":%d}\n\n", res.Missed)) {

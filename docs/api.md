@@ -60,6 +60,7 @@ data: {"seq":43,...}
 - The stored position advances only after an event was written and flushed. It never moves backwards.
 - Delivery is at least once: a missed notice or an event can repeat after a failed write.
 - Resume with `Last-Event-ID`: the stored position can be one event ahead of what a dropped client actually received.
+- A log reset rewinds the consumer's shared stored position, so concurrent subscribers of that consumer may get events re-delivered.
 - 400 for a `Last-Event-ID` or `after` that is not a non-negative integer.
 
 ## Send

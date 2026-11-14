@@ -352,3 +352,21 @@ func TestEventsResetRewindsStoredPosition(t *testing.T) {
 	awaitParked(t, parked)
 	st.expectNone(t)
 }
+
+func TestEventsResetKeepsPositionAtLastDeliveredOnFailedWrite(t *testing.T) {
+	f := newFixture(t)
+	first := f.append(t, "dsh", "group_text", baseTime.Add(-time.Hour))
+	for range 2 {
+		f.append(t, "dsh", "group_text", baseTime.Add(-time.Hour))
+	}
+	if err := f.store.SetPosition(context.Background(), "dsh", "events", 999); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/events", nil)
+	req = req.WithContext(context.WithValue(req.Context(), consumerKey{}, "dsh"))
+	f.srv.events(&failingWriter{header: http.Header{}, failAt: 3}, req)
+	pos, ok, err := f.store.Position(context.Background(), "dsh", "events")
+	if err != nil || !ok || pos != first {
+		t.Fatalf("pos=%d ok=%v err=%v want %d", pos, ok, err, first)
+	}
+}
