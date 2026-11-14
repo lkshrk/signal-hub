@@ -59,6 +59,9 @@ func (r *Router) Route(p message.Parsed) (string, bool) {
 		name, ok := r.groups[p.GroupID]
 		return name, ok
 	}
+	if p.Kind != message.KindTyping && !slices.Contains(message.Deliverable, p.Kind) {
+		return "", false
+	}
 	for _, c := range r.consumers {
 		if hasSender(c.Senders, p.SourceNumber) || hasSender(c.Senders, p.SourceUUID) {
 			return c.Name, true

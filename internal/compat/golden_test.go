@@ -135,8 +135,13 @@ func (f *fixture) events(t *testing.T, g golden) (int, string, string) {
 	var out strings.Builder
 	out.WriteString(st.next(t))
 	f.awaitParked(t)
+	// Goldens pin the wire format, so frames go to this consumer without routing.
 	for _, fr := range g.Frames {
-		f.appendFrame(t, []byte(fr), baseTime)
+		p, err := message.Parse([]byte(fr))
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.appendFor(t, p, f.srv.Consumer, []byte(fr), baseTime)
 	}
 	for range g.Frames {
 		out.WriteString(st.next(t))

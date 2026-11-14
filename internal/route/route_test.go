@@ -92,6 +92,23 @@ func TestGroupMessageIgnoresSenderList(t *testing.T) {
 	}
 }
 
+func TestRouteMetadataKindsNeverRouteBySender(t *testing.T) {
+	f := newFixture(t)
+	for _, kind := range []string{message.KindReceipt, message.KindSync, message.KindOther} {
+		if got, ok := f.r.Route(message.Parsed{Kind: kind, SourceNumber: number, SourceUUID: uuidLo}); ok || got != "" {
+			t.Errorf("Route(%s by sender) = (%q, %v), want unclaimed", kind, got, ok)
+		}
+		if got, ok := f.r.Route(message.Parsed{Kind: kind, GroupID: gid('a'), SourceNumber: number}); !ok || got != "dsh" {
+			t.Errorf("Route(%s in group) = (%q, %v), want (dsh, true)", kind, got, ok)
+		}
+	}
+	for _, kind := range append([]string{message.KindTyping}, message.Deliverable...) {
+		if got, ok := f.r.Route(message.Parsed{Kind: kind, SourceNumber: number}); !ok || got != "hermes" {
+			t.Errorf("Route(%s by sender) = (%q, %v), want (hermes, true)", kind, got, ok)
+		}
+	}
+}
+
 func TestRouteUnclaimed(t *testing.T) {
 	f := newFixture(t)
 	if got, ok := f.r.Route(message.Parsed{Kind: message.KindMessage, GroupID: gid('z')}); ok || got != "" {

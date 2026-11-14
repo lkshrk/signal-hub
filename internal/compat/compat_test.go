@@ -178,6 +178,11 @@ func (f *fixture) appendFrame(t *testing.T, raw []byte, at time.Time) int64 {
 		t.Fatal(err)
 	}
 	consumer, _ := f.router.Route(p)
+	return f.appendFor(t, p, consumer, raw, at)
+}
+
+func (f *fixture) appendFor(t *testing.T, p message.Parsed, consumer string, raw []byte, at time.Time) int64 {
+	t.Helper()
 	seq, dup, err := f.store.Append(context.Background(), store.Entry{Parsed: p, Consumer: consumer, ReceivedAt: at, Raw: raw})
 	if err != nil || dup {
 		t.Fatalf("append: seq=%d dup=%v err=%v", seq, dup, err)
@@ -427,7 +432,7 @@ func TestEventsResumeFromCompatPosition(t *testing.T) {
 	frames := [][]byte{
 		envelopeFixture(t, "group_text"),
 		envelopeFixture(t, "direct_attachment"),
-		envelopeFixture(t, "receipt"),
+		envelopeFixture(t, "reaction"),
 	}
 	f.appendFrame(t, frames[0], baseTime)
 	f.appendFrame(t, frames[1], baseTime)
@@ -464,6 +469,20 @@ func TestEventsOnlyRoutedEnvelopes(t *testing.T) {
 	}
 }
 
+func TestEventsDoNotRelayDirectReceiptsOrSync(t *testing.T) {
+	f := newFixture(t, fixtureOpts{})
+	st := f.openStream(t, eventsPath)
+	st.next(t)
+	f.awaitParked(t)
+	f.appendFrame(t, envelopeFixture(t, "receipt"), baseTime)
+	f.appendFrame(t, envelopeFixture(t, "sync"), baseTime)
+	text := envelopeFixture(t, "direct_attachment")
+	f.appendFrame(t, text, baseTime)
+	if got := st.next(t); got != "data: "+string(compact(text))+"\n\n" {
+		t.Fatalf("block %q", got)
+	}
+}
+
 func TestEventsSkipOlderThanMaxReplayAge(t *testing.T) {
 	f := newFixture(t, fixtureOpts{maxReplayAge: 10 * time.Minute})
 	f.appendFrame(t, envelopeFixture(t, "group_text"), baseTime.Add(-20*time.Minute))
@@ -476,7 +495,7 @@ func TestEventsSkipOlderThanMaxReplayAge(t *testing.T) {
 	if pos, ok, err := f.store.Position(context.Background(), "hermes", store.ChannelCompat); err != nil || !ok || pos != 1 {
 		t.Fatalf("position after skip = %d %v %v", pos, ok, err)
 	}
-	fresh := envelopeFixture(t, "receipt")
+	fresh := envelopeFixture(t, "direct_attachment")
 	f.appendFrame(t, fresh, baseTime)
 	if got := st.next(t); got != "data: "+string(compact(fresh))+"\n\n" {
 		t.Fatalf("block %q", got)
@@ -493,7 +512,7 @@ func TestEventsSkipOlderThanMaxReplayAge(t *testing.T) {
 func TestEventsReadPastFullScanOfMissedRows(t *testing.T) {
 	f := newFixture(t, fixtureOpts{maxReplayAge: 10 * time.Minute})
 	f.srv.scanLimit = 3
-	for _, name := range []string{"group_hermes_text", "direct_attachment", "poll_vote", "reaction", "edit"} {
+	for _, name := range []string{"group_quote_mentions", "direct_attachment", "poll_vote", "reaction", "edit"} {
 		f.appendFrame(t, envelopeFixture(t, name), baseTime.Add(-20*time.Minute))
 	}
 	fresh := envelopeFixture(t, "group_text")
