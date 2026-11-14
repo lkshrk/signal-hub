@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"slices"
 	"time"
 
@@ -33,8 +34,21 @@ type Page struct {
 }
 
 func (s *Store) Read(ctx context.Context, q Query) (Page, error) {
+	var page Page
+	err := s.rdb.RunInTx(ctx, &sql.TxOptions{ReadOnly: true}, func(ctx context.Context, tx bun.Tx) error {
+		var err error
+		page, err = readPage(ctx, tx, q)
+		return err
+	})
+	if err != nil {
+		return Page{}, err
+	}
+	return page, nil
+}
+
+func readPage(ctx context.Context, db bun.IDB, q Query) (Page, error) {
 	page := Page{Records: []Record{}, Next: q.After}
-	sel := s.rdb.NewSelect().Model((*messageRow)(nil)).
+	sel := db.NewSelect().Model((*messageRow)(nil)).
 		Column("seq", "received_at", "kind", "consumer").
 		Where("seq > ?", q.After).Order("seq").Limit(maxScan)
 	if q.Consumer == "" {
@@ -65,27 +79,32 @@ scan:
 			}
 		}
 	}
-	return page, s.loadRaw(ctx, page.Records)
+	return page, loadRaw(ctx, db, &page)
 }
 
-func (s *Store) loadRaw(ctx context.Context, recs []Record) error {
-	if len(recs) == 0 {
+func loadRaw(ctx context.Context, db bun.IDB, page *Page) error {
+	if len(page.Records) == 0 {
 		return nil
 	}
-	ids := make([]int64, len(recs))
-	for i, r := range recs {
+	ids := make([]int64, len(page.Records))
+	for i, r := range page.Records {
 		ids[i] = r.Seq
 	}
 	var rows []messageRow
-	if err := s.rdb.NewSelect().Model(&rows).Column("seq", "raw").Where("seq IN (?)", bun.List(ids)).Scan(ctx); err != nil {
+	if err := db.NewSelect().Model(&rows).Column("seq", "raw").Where("seq IN (?)", bun.List(ids)).Scan(ctx); err != nil {
 		return err
 	}
 	raw := make(map[int64][]byte, len(rows))
 	for _, r := range rows {
 		raw[r.Seq] = r.Raw
 	}
-	for i := range recs {
-		recs[i].Raw = raw[recs[i].Seq]
+	kept := page.Records[:0]
+	for _, rec := range page.Records {
+		if b, ok := raw[rec.Seq]; ok {
+			rec.Raw = b
+			kept = append(kept, rec)
+		}
 	}
+	page.Records = kept
 	return nil
 }

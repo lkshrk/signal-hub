@@ -394,6 +394,10 @@ func TestConcurrentIngestPullPruneNoBusy(t *testing.T) {
 				}
 				prev := after
 				for _, r := range p.Records {
+					if len(r.Raw) == 0 {
+						report(fmt.Errorf("seq %d returned without raw", r.Seq))
+						return
+					}
 					if r.Seq <= prev {
 						report(fmt.Errorf("seq %d not above %d", r.Seq, prev))
 						return
