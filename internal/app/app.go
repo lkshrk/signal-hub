@@ -125,9 +125,11 @@ func (a *App) Run(ctx context.Context) error {
 		})
 	}
 
-	// Outlives the servers so in-flight appends can finish.
+	// Outlives the servers; storeCtx lets received frames finish storing until the exit deadline.
 	ingestCtx, cancelIngest := context.WithCancel(context.Background())
 	defer cancelIngest()
+	storeCtx, cancelStore := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelStore()
 	ing := &ingest.Ingester{
 		URL:    a.upstream.ReceiveURL(),
 		Store:  st,
@@ -140,7 +142,7 @@ func (a *App) Run(ctx context.Context) error {
 	ingestDone := make(chan struct{})
 	go func() {
 		defer close(ingestDone)
-		_ = ing.Run(ingestCtx)
+		_ = ing.Run(ingestCtx, storeCtx)
 	}()
 
 	loopCtx, cancelLoops := context.WithCancel(ctx)
@@ -171,6 +173,7 @@ func (a *App) Run(ctx context.Context) error {
 	select {
 	case <-ingestDone:
 	case <-time.After(time.Until(deadline)):
+		cancelStore()
 		a.log.Warn("ingester did not stop within the exit budget")
 	}
 	loops.Wait()

@@ -40,6 +40,8 @@ type Ingester struct {
 	PingInterval time.Duration
 	PingTimeout  time.Duration
 	DialTimeout  time.Duration
+
+	queued func()
 }
 
 func (i *Ingester) applyDefaults() {
@@ -83,7 +85,8 @@ func sleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-func (i *Ingester) Run(ctx context.Context) error {
+// Run reads until ctx ends; storeCtx bounds appends, so frames already received are stored after ctx ends.
+func (i *Ingester) Run(ctx, storeCtx context.Context) error {
 	i.applyDefaults()
 	attempt := 0
 	connectedOnce := false
@@ -109,7 +112,7 @@ func (i *Ingester) Run(ctx context.Context) error {
 			connectedOnce = true
 			i.Health.UpstreamConnected(true)
 
-			sessionErr := i.session(ctx, conn)
+			sessionErr := i.session(ctx, storeCtx, conn)
 			i.Health.UpstreamConnected(false)
 			uptime := i.Now().Sub(started)
 			if ctx.Err() == nil {
@@ -137,7 +140,7 @@ func errString(err error) string {
 	return err.Error()
 }
 
-func (i *Ingester) session(ctx context.Context, conn *websocket.Conn) error {
+func (i *Ingester) session(ctx, storeCtx context.Context, conn *websocket.Conn) error {
 	sessCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -169,6 +172,9 @@ func (i *Ingester) session(ctx context.Context, conn *websocket.Conn) error {
 			}
 			select {
 			case frames <- data:
+				if i.queued != nil {
+					i.queued()
+				}
 			case <-sessCtx.Done():
 				return
 			}
@@ -212,7 +218,7 @@ func (i *Ingester) session(ctx context.Context, conn *websocket.Conn) error {
 	}()
 
 	for data := range frames {
-		i.handle(ctx, data)
+		i.handle(storeCtx, data)
 	}
 	close(pingEnd)
 	close(stopWatch)

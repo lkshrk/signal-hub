@@ -157,7 +157,7 @@ func (r *rig) start(t *testing.T) (cancel func(), done <-chan error) {
 	fin := make(chan struct{})
 	go func() {
 		defer close(fin)
-		ch <- r.ing.Run(ctx)
+		ch <- r.ing.Run(ctx, ctx)
 	}()
 	t.Cleanup(func() {
 		c()
@@ -606,4 +606,83 @@ type blockingStore struct{}
 func (blockingStore) Append(ctx context.Context, _ store.Entry) (int64, bool, error) {
 	<-ctx.Done()
 	return 0, false, ctx.Err()
+}
+
+type gatedStore struct {
+	inner *store.Store
+	gate  chan struct{}
+}
+
+func (g *gatedStore) Append(ctx context.Context, e store.Entry) (int64, bool, error) {
+	select {
+	case <-g.gate:
+	case <-ctx.Done():
+		return 0, false, ctx.Err()
+	}
+	return g.inner.Append(ctx, e)
+}
+
+func TestIngestStoresBufferedFramesAfterCancel(t *testing.T) {
+	names := []string{"group_text", "group_hermes_text", "direct_attachment", "reaction", "edit"}
+	frames := make([][]byte, len(names))
+	for i, n := range names {
+		frames[i] = frame(t, n)
+	}
+	srv := testupstream.New(t, testupstream.Seq(testupstream.Write(frames...), testupstream.Hold))
+	r := newRig(t, srv.URL())
+	gs := &gatedStore{inner: r.store, gate: make(chan struct{})}
+	r.ing.Store = gs
+	var queued atomic.Int64
+	r.ing.queued = func() { queued.Add(1) }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	storeCtx, cancelStore := context.WithCancel(context.Background())
+	defer cancelStore()
+	done := make(chan error, 1)
+	go func() { done <- r.ing.Run(ctx, storeCtx) }()
+
+	eventually(t, "frames queued", func() bool { return queued.Load() == int64(len(frames)) })
+	cancel()
+	close(gs.gate)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return after cancel")
+	}
+	if h, err := r.store.Head(context.Background()); err != nil || h != int64(len(frames)) {
+		t.Fatalf("head = %d, %v; want %d", h, err, len(frames))
+	}
+}
+
+func TestIngestDrainEndsWithStoreContext(t *testing.T) {
+	srv := testupstream.New(t, testupstream.Seq(testupstream.Write(frame(t, "group_text"), frame(t, "reaction")), testupstream.Hold))
+	r := newRig(t, srv.URL())
+	r.ing.Store = blockingStore{}
+	var queued atomic.Int64
+	r.ing.queued = func() { queued.Add(1) }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	storeCtx, cancelStore := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.ing.Run(ctx, storeCtx) }()
+
+	eventually(t, "frames queued", func() bool { return queued.Load() == 2 })
+	cancel()
+	select {
+	case err := <-done:
+		t.Fatalf("Run = %v before the store context ended", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	cancelStore()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return after the store context ended")
+	}
 }
