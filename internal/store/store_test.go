@@ -165,6 +165,23 @@ func TestReadCountsMissedByReceivedAt(t *testing.T) {
 	}
 }
 
+func TestReadMissedCountsOnlyRequestedKinds(t *testing.T) {
+	s := openStore(t)
+	now := time.Now()
+	old := now.Add(-2 * time.Hour)
+	mustAppend(t, s, entry("dsh", message.KindTyping, 0, old))
+	mustAppend(t, s, entry("dsh", message.KindReceipt, 1, old))
+	mustAppend(t, s, entry("dsh", message.KindMessage, 2, old))
+	last := mustAppend(t, s, entry("dsh", message.KindReceipt, 3, old))
+	p, err := s.Read(context.Background(), Query{Consumer: "dsh", Kinds: message.Deliverable, NotBefore: now.Add(-time.Hour), Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Records) != 0 || p.Missed != 1 || p.Next != last {
+		t.Fatalf("page = %+v", p)
+	}
+}
+
 func TestReadLimit(t *testing.T) {
 	s := openStore(t)
 	now := time.Now()

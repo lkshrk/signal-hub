@@ -65,9 +65,9 @@ scan:
 	for _, r := range rows {
 		page.Next = r.Seq
 		switch {
+		case q.Kinds != nil && !slices.Contains(q.Kinds, r.Kind):
 		case !q.NotBefore.IsZero() && r.ReceivedAt < notBefore:
 			page.Missed++
-		case q.Kinds != nil && !slices.Contains(q.Kinds, r.Kind):
 		default:
 			rec := Record{Seq: r.Seq, ReceivedAt: time.UnixMilli(r.ReceivedAt).UTC(), Kind: r.Kind}
 			if r.Consumer != nil {
