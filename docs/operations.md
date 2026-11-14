@@ -14,10 +14,12 @@ Outbound, the hub connects to `upstream.url` (signal-cli-rest-api, HTTP and WebS
 
 The store is one SQLite file, `sqlite:///var/lib/signal-hub/hub.db` by default, written through a pure Go driver (no CGO). Postgres is not supported in v1.
 
-- Mount a persistent volume at the database's directory. The image runs as 65532 and creates the directory with that owner, so a fresh volume works.
+- Mount a persistent volume at the database's directory. The image runs as 65532 and creates the directory with that owner, which a fresh Docker named volume inherits.
+- On Kubernetes a PVC or emptyDir is mounted root-owned and the nonroot hub cannot write to it. Set `securityContext` with `runAsUser: 65532`, `runAsGroup: 65532` and `fsGroup: 65532`, or chown the volume in an initContainer.
+- SQLite keeps `hub.db-wal` and `hub.db-shm` next to `hub.db`. Copying `hub.db` alone while the hub runs is unsafe.
 - Without a volume the log, dedupe keys and consumer positions are lost on restart.
 - Run a single replica; the database is not shared between processes.
-- Back up by copying the database files with the pod stopped, or online with `sqlite3 /var/lib/signal-hub/hub.db ".backup '/backup/hub.db'"` (the image has no shell; run it from a debug container with the volume mounted).
+- Back up by stopping the pod and copying all three database files, or online with `sqlite3 /var/lib/signal-hub/hub.db ".backup '/backup/hub.db'"` (the image has no shell; run it from a debug container with the volume mounted).
 - Messages older than `retention` are pruned hourly.
 
 ## Health

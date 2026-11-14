@@ -22,6 +22,7 @@ docker run --rm \
   ghcr.io/lkshrk/signal-hub:latest
 ```
 
+- The `:latest` tag exists only after the first release.
 - The image runs as user 65532. The `signal-hub-data` volume holds the SQLite database and is created writable for that user.
 - Edit `upstream.url` and the consumers in `config.yaml` first; one token file per consumer, named after it.
 - `curl localhost:9090/healthz` reports the state, and `curl -H "Authorization: Bearer $(cat hub/tokens/dsh)" "localhost:8080/v1/messages?wait=30"` pulls messages.
