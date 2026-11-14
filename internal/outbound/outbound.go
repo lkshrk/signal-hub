@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf16"
 
 	"github.com/lkshrk/signal-hub/internal/styles"
@@ -18,6 +20,8 @@ const (
 	ResultRateLimited = "rate_limited"
 	ResultError       = "error"
 )
+
+var contentTypePattern = regexp.MustCompile("^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+$")
 
 var styleNames = map[string]bool{"BOLD": true, "ITALIC": true, "STRIKETHROUGH": true, "MONOSPACE": true, "SPOILER": true}
 
@@ -79,24 +83,59 @@ func Validate(m Message) error {
 		}
 		return validatePoll(m.Poll)
 	}
-	if m.Text == "" && len(m.Attachments) == 0 {
+	if strings.TrimSpace(m.Text) == "" && len(m.Attachments) == 0 {
 		return invalid("text, attachments or poll required")
 	}
-	if m.Quote != nil && m.Quote.Author == "" {
-		return invalid("quote.author: required")
+	if m.Quote != nil {
+		if m.Quote.Author == "" {
+			return invalid("quote.author: required")
+		}
+		if m.Quote.Timestamp <= 0 {
+			return invalid("quote.timestamp: required")
+		}
 	}
 	if len(m.Mentions) > 0 && len(m.Styles) > 0 {
 		return invalid("mentions and styles cannot be combined")
 	}
+	if err := validateMentions(m.Text, m.Mentions); err != nil {
+		return err
+	}
 	if err := validateStyles(m.Text, m.Styles); err != nil {
 		return err
 	}
-	for i, a := range m.Attachments {
+	return validateAttachments(m.Attachments)
+}
+
+func validateMentions(text string, list []Mention) error {
+	n := len(utf16.Encode([]rune(text)))
+	for i, mn := range list {
+		if mn.Start < 0 || mn.Length <= 0 || mn.Start+mn.Length > n {
+			return invalid("mentions[%d]: range outside text", i)
+		}
+	}
+	return nil
+}
+
+func validateAttachments(list []File) error {
+	for i, a := range list {
+		if a.ContentType != "" && !contentTypePattern.MatchString(a.ContentType) {
+			return invalid("attachments[%d].contentType: invalid", i)
+		}
+		if strings.ContainsFunc(a.Filename, badFilenameRune) {
+			return invalid("attachments[%d].filename: invalid", i)
+		}
+		if a.Data == "" || strings.ContainsFunc(a.Data, unicode.IsSpace) {
+			return invalid("attachments[%d].data: invalid base64", i)
+		}
 		if _, err := base64.StdEncoding.DecodeString(a.Data); err != nil {
 			return invalid("attachments[%d].data: invalid base64", i)
 		}
 	}
 	return nil
+}
+
+func badFilenameRune(r rune) bool {
+	return r == ';' || r == ',' || r == '/' || r == '\\' || unicode.IsControl(r)
 }
 
 func validatePoll(p *Poll) error {

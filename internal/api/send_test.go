@@ -10,8 +10,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/lkshrk/signal-hub/internal/config"
 	"github.com/lkshrk/signal-hub/internal/groupid"
+	"github.com/lkshrk/signal-hub/internal/route"
 	"github.com/lkshrk/signal-hub/internal/upstream"
 )
 
@@ -299,4 +302,55 @@ func TestSendReportsFailures(t *testing.T) {
 		t.Fatalf("%d %s", res.StatusCode, res.Body)
 	}
 	jsonEq(t, string(res.Body), `{"timestamp":1761245000123,"timestamps":[1761245000123],"failures":[{"number":"+492","uuid":"","reason":"UNREGISTERED"}]}`)
+}
+
+func TestSendToAllowedSendersKeepsRecipientAsSent(t *testing.T) {
+	const upperUUID = "0B6A1C2D-1111-2222-3333-444455556666"
+	for _, recipient := range []string{"+4915187654321", upperUUID} {
+		f, rec := sendFixture(t)
+		now := func() time.Time { return baseTime }
+		f.srv.Router = route.New([]config.Consumer{
+			{Name: "dsh", GroupIDs: []string{internalA}, Senders: []string{"+4915187654321", "0b6a1c2d-1111-2222-3333-444455556666"}, Token: dshToken},
+		}, now, f.srv.Log, f.srv.Health)
+		res := f.post(t, dshToken, "/v1/send", `{"recipient":"`+recipient+`","text":"hi"}`)
+		if res.StatusCode != 200 {
+			t.Fatalf("%s: %d %s", recipient, res.StatusCode, res.Body)
+		}
+		_, body, _ := rec.last()
+		var got struct {
+			Recipients []string `json:"recipients"`
+		}
+		if err := json.Unmarshal([]byte(body), &got); err != nil || len(got.Recipients) != 1 || got.Recipients[0] != recipient {
+			t.Errorf("recipients = %v (%v), want %q", got.Recipients, err, recipient)
+		}
+	}
+}
+
+func TestSendDeniedBeforeContentValidation(t *testing.T) {
+	f, _ := sendFixture(t)
+	res := f.post(t, dshToken, "/v1/send", `{"recipient":"`+internalB+`"}`)
+	assertError(t, res, 403, "recipient not allowed")
+}
+
+func TestSendRejectsUnsafeAttachmentFields(t *testing.T) {
+	f, rec := sendFixture(t)
+	res := f.post(t, dshToken, "/v1/send", `{"recipient":"`+internalA+`","attachments":[{"contentType":"image/png;x=1","data":"aGk="}]}`)
+	assertError(t, res, 400, "attachments[0].contentType: invalid")
+	res = f.post(t, dshToken, "/v1/send", `{"recipient":"`+internalA+`","attachments":[{"contentType":"image/png","filename":"a;b","data":"aGk="}]}`)
+	assertError(t, res, 400, "attachments[0].filename: invalid")
+	res = f.post(t, dshToken, "/v1/send", `{"recipient":"`+internalA+`","attachments":[{"contentType":"image/png","data":"aG\nk="}]}`)
+	assertError(t, res, 400, "attachments[0].data: invalid base64")
+	if _, _, hits := rec.last(); hits != 0 {
+		t.Errorf("upstream hit")
+	}
+}
+
+func TestSendRejectsBadMentionAndQuote(t *testing.T) {
+	f, _ := sendFixture(t)
+	res := f.post(t, dshToken, "/v1/send", `{"recipient":"`+internalA+`","text":"ab","mentions":[{"start":0,"length":5,"author":"u"}]}`)
+	assertError(t, res, 400, "mentions[0]: range outside text")
+	res = f.post(t, dshToken, "/v1/send", `{"recipient":"`+internalA+`","text":"x","quote":{"author":"+49"}}`)
+	assertError(t, res, 400, "quote.timestamp: required")
+	res = f.post(t, dshToken, "/v1/send", `{"recipient":"`+internalA+`","text":"  "}`)
+	assertError(t, res, 400, "text, attachments or poll required")
 }

@@ -257,3 +257,68 @@ func TestDeliverValidationFailsBeforeUpstream(t *testing.T) {
 		t.Errorf("upstream hit %d times", hits)
 	}
 }
+
+func TestValidateAttachmentFields(t *testing.T) {
+	file := func(ct, name, data string) Message {
+		return Message{Attachments: []File{{ContentType: ct, Filename: name, Data: data}}}
+	}
+	cases := []struct {
+		name string
+		m    Message
+		want string
+	}{
+		{"type param injection", file("image/png;x=1", "", "aGk="), "attachments[0].contentType: invalid"},
+		{"type comma", file("image/png,", "", "aGk="), "attachments[0].contentType: invalid"},
+		{"type newline", file("image/png\r\nX: y", "", "aGk="), "attachments[0].contentType: invalid"},
+		{"type no subtype", file("image", "", "aGk="), "attachments[0].contentType: invalid"},
+		{"name semicolon", file("image/png", "a;b.png", "aGk="), "attachments[0].filename: invalid"},
+		{"name comma", file("image/png", "a,b.png", "aGk="), "attachments[0].filename: invalid"},
+		{"name slash", file("image/png", "../a.png", "aGk="), "attachments[0].filename: invalid"},
+		{"name backslash", file("image/png", `a\b.png`, "aGk="), "attachments[0].filename: invalid"},
+		{"name control", file("image/png", "a\nb.png", "aGk="), "attachments[0].filename: invalid"},
+		{"data newline", file("image/png", "", "aG\nk="), "attachments[0].data: invalid base64"},
+		{"data carriage return", file("image/png", "", "aG\rk="), "attachments[0].data: invalid base64"},
+		{"data space", file("image/png", "", "aG k="), "attachments[0].data: invalid base64"},
+		{"data empty", file("image/png", "", ""), "attachments[0].data: invalid base64"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := validationText(t, Validate(c.m)); got != c.want {
+				t.Errorf("got %q want %q", got, c.want)
+			}
+		})
+	}
+	ok := file("application/vnd.api+json", "report 1.pdf", "aGk=")
+	if err := Validate(ok); err != nil {
+		t.Errorf("valid attachment: %v", err)
+	}
+}
+
+func TestValidateTextQuoteAndMentionRanges(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Message
+		want string
+	}{
+		{"whitespace text", Message{Text: " \n\t"}, "text, attachments or poll required"},
+		{"quote zero timestamp", Message{Text: "x", Quote: &Quote{Author: "a"}}, "quote.timestamp: required"},
+		{"quote negative timestamp", Message{Text: "x", Quote: &Quote{Timestamp: -1, Author: "a"}}, "quote.timestamp: required"},
+		{"mention past end", Message{Text: "ab", Mentions: []Mention{{0, 3, "u"}}}, "mentions[0]: range outside text"},
+		{"mention negative", Message{Text: "ab", Mentions: []Mention{{-1, 1, "u"}}}, "mentions[0]: range outside text"},
+		{"mention zero length", Message{Text: "ab", Mentions: []Mention{{0, 0, "u"}}}, "mentions[0]: range outside text"},
+		{"mention utf16", Message{Text: "\U0001F600", Mentions: []Mention{{0, 3, "u"}}}, "mentions[0]: range outside text"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := validationText(t, Validate(c.m)); got != c.want {
+				t.Errorf("got %q want %q", got, c.want)
+			}
+		})
+	}
+	if err := Validate(Message{Text: "\U0001F600 hi", Mentions: []Mention{{0, 2, "u"}}}); err != nil {
+		t.Errorf("surrogate pair mention: %v", err)
+	}
+	if err := Validate(Message{Text: " ", Attachments: []File{{Data: "aGk="}}}); err != nil {
+		t.Errorf("whitespace text with attachment: %v", err)
+	}
+}

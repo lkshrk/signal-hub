@@ -57,7 +57,7 @@ data: {"seq":43,...}
 - `data` is one message in the [neutral format](message-format.md); `id` is its `seq`.
 - A gap over `maxReplayAge` is announced first as `event: missed` with `data: {"count":<n>}`. It is logged and counted like in pull, with channel `events`.
 - `: keepalive` is sent every 25 seconds.
-- The stored position advances only after an event was written and flushed. It never moves backwards.
+- The stored position advances only after an event was written and flushed. It moves backwards only on a log reset (see below).
 - Delivery is at least once: a missed notice or an event can repeat after a failed write.
 - Resume with `Last-Event-ID`: the stored position can be one event ahead of what a dropped client actually received.
 - A log reset rewinds the consumer's shared stored position, so concurrent subscribers of that consumer may get events re-delivered.
@@ -96,8 +96,10 @@ Rules:
 - `poll` excludes every other content field. It needs a non-empty question and at least two non-empty options.
 - `mentions` and `styles` cannot be combined.
 - Styles are `BOLD`, `ITALIC`, `STRIKETHROUGH`, `MONOSPACE` or `SPOILER`, with UTF-16 offsets inside the text. A range the styled parser cannot express is sent unstyled.
-- `quote.author` is required with `quote`.
-- `attachments[].data` must be valid base64.
+- `quote.author` and a positive `quote.timestamp` are required with `quote`.
+- `mentions` ranges lie inside the text (UTF-16 offsets). Whitespace-only text does not count as text.
+- `attachments[].data` must be non-empty base64 without whitespace. `contentType`, when given, must be `type/subtype` made of token characters. `filename` must not contain `;`, `,`, `/`, `\` or control characters.
+- Checks run in this order: body size (413), JSON (400), recipient ownership (403), content rules (400).
 
 Errors:
 

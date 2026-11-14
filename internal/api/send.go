@@ -95,15 +95,15 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	msg := req.message()
-	if err := outbound.Validate(msg); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
 	recipient, ok := s.Router.Allowed(consumer, req.Recipient)
 	if !ok {
 		s.Health.Sent(consumer, outbound.ResultDenied)
 		s.Log.Warn("send denied", "consumer", consumer, "recipient", req.Recipient)
 		writeError(w, http.StatusForbidden, "recipient not allowed")
+		return
+	}
+	if err := outbound.Validate(msg); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	res, err := outbound.Deliver(r.Context(), s.Upstream, recipient, msg)
