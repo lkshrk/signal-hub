@@ -1,0 +1,22 @@
+pre-commit:
+  parallel: true
+  commands:
+    gitleaks:
+      run: gitleaks git --staged --redact --no-banner
+    gofmt:
+      glob: "*.go"
+      run: 'test -z "$(gofmt -l {staged_files})" || { gofmt -l {staged_files}; echo "run gofmt -w on these files"; exit 1; }'
+    vet:
+      glob: "*.go"
+      run: go vet ./...
+    actionlint:
+      glob: ".github/workflows/*.{yml,yaml}"
+      run: actionlint {staged_files}
+    yaml:
+      glob: "*.{yaml,yml}"
+      run: 'for f in {staged_files}; do yq "." "$f" >/dev/null || exit 1; done'
+
+pre-push:
+  commands:
+    test:
+      run: go test -race ./...
