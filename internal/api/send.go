@@ -102,11 +102,12 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "recipient not allowed")
 		return
 	}
-	if err := outbound.Validate(msg); err != nil {
+	valid, err := outbound.Validate(msg)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	res, err := outbound.Deliver(r.Context(), s.Upstream, recipient, msg)
+	res, err := outbound.Deliver(r.Context(), s.Upstream, recipient, valid)
 	kind := outbound.Kind(err)
 	if err != nil {
 		if r.Context().Err() != nil {

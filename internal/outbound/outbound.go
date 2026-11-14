@@ -76,7 +76,17 @@ func invalid(format string, args ...any) error {
 	return &ValidationError{Msg: fmt.Sprintf(format, args...)}
 }
 
-func Validate(m Message) error {
+// Valid is a Message that passed Validate; Request and Deliver take only Valid messages.
+type Valid struct{ m Message }
+
+func Validate(m Message) (Valid, error) {
+	if err := validate(m); err != nil {
+		return Valid{}, err
+	}
+	return Valid{m}, nil
+}
+
+func validate(m Message) error {
 	if m.Poll != nil {
 		if m.Text != "" || m.Quote != nil || len(m.Mentions) > 0 || len(m.Styles) > 0 || len(m.Attachments) > 0 {
 			return invalid("poll cannot be combined with text, quote, mentions, styles or attachments")
@@ -163,10 +173,8 @@ func validateStyles(text string, list []Style) error {
 	return nil
 }
 
-func Request(account, recipient string, m Message) (upstream.SendRequest, error) {
-	if err := Validate(m); err != nil {
-		return upstream.SendRequest{}, err
-	}
+func Request(account, recipient string, v Valid) upstream.SendRequest {
+	m := v.m
 	req := upstream.SendRequest{Number: account, Recipients: []string{recipient}, Message: m.Text}
 	if q := m.Quote; q != nil {
 		req.QuoteTimestamp, req.QuoteAuthor = &q.Timestamp, &q.Author
@@ -190,7 +198,7 @@ func Request(account, recipient string, m Message) (upstream.SendRequest, error)
 	for _, a := range m.Attachments {
 		req.Base64Attachments = append(req.Base64Attachments, dataURI(a))
 	}
-	return req, nil
+	return req
 }
 
 func dataURI(a File) string {
@@ -207,22 +215,15 @@ func dataURI(a File) string {
 	return b.String()
 }
 
-func Deliver(ctx context.Context, c *upstream.Client, recipient string, m Message) (Result, error) {
-	if err := Validate(m); err != nil {
-		return Result{}, err
-	}
-	if p := m.Poll; p != nil {
+func Deliver(ctx context.Context, c *upstream.Client, recipient string, v Valid) (Result, error) {
+	if p := v.m.Poll; p != nil {
 		ts, err := c.CreatePoll(ctx, recipient, p.Question, p.Options, p.AllowMultiple)
 		if err != nil {
 			return Result{}, err
 		}
 		return Result{Timestamp: ts, Timestamps: []int64{ts}}, nil
 	}
-	req, err := Request(c.Account(), recipient, m)
-	if err != nil {
-		return Result{}, err
-	}
-	results, err := c.Send(ctx, req)
+	results, err := c.Send(ctx, Request(c.Account(), recipient, v))
 	if err != nil {
 		return Result{}, err
 	}

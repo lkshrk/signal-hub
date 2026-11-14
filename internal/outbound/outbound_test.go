@@ -24,11 +24,22 @@ func validationText(t *testing.T, err error) string {
 	return ve.Error()
 }
 
-func TestRequestPlainText(t *testing.T) {
-	req, err := Request(account, "rest", Message{Text: "hi"})
+func validateErr(m Message) error {
+	_, err := Validate(m)
+	return err
+}
+
+func mustValid(t *testing.T, m Message) Valid {
+	t.Helper()
+	v, err := Validate(m)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return v
+}
+
+func TestRequestPlainText(t *testing.T) {
+	req := Request(account, "rest", mustValid(t, Message{Text: "hi"}))
 	raw, _ := json.Marshal(req)
 	want := `{"number":"+4915112345678","recipients":["rest"],"message":"hi"}`
 	if string(raw) != want {
@@ -37,20 +48,14 @@ func TestRequestPlainText(t *testing.T) {
 }
 
 func TestRequestStylesRenderStyledMode(t *testing.T) {
-	req, err := Request(account, "rest", Message{Text: "Done now", Styles: []Style{{Start: 0, Length: 4, Style: "BOLD"}}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	req := Request(account, "rest", mustValid(t, Message{Text: "Done now", Styles: []Style{{Start: 0, Length: 4, Style: "BOLD"}}}))
 	if req.Message != "**Done** now" || req.TextMode == nil || *req.TextMode != "styled" {
 		t.Errorf("message=%q mode=%v", req.Message, req.TextMode)
 	}
 }
 
 func TestRequestInexpressibleStylesSendUnstyled(t *testing.T) {
-	req, err := Request(account, "rest", Message{Text: "a*b", Styles: []Style{{Start: 2, Length: 1, Style: "ITALIC"}, {Start: 0, Length: 2, Style: "ITALIC"}}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	req := Request(account, "rest", mustValid(t, Message{Text: "a*b", Styles: []Style{{Start: 2, Length: 1, Style: "ITALIC"}, {Start: 0, Length: 2, Style: "ITALIC"}}}))
 	if req.TextMode != nil || req.Message != "a*b" {
 		t.Errorf("message=%q mode=%v", req.Message, req.TextMode)
 	}
@@ -71,7 +76,7 @@ func TestRequestStyleErrors(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := Request(account, "rest", c.m)
+			err := validateErr(c.m)
 			if got := validationText(t, err); got != c.want {
 				t.Errorf("got %q want %q", got, c.want)
 			}
@@ -80,17 +85,14 @@ func TestRequestStyleErrors(t *testing.T) {
 }
 
 func TestRequestUTF16RangeAccepted(t *testing.T) {
-	req, err := Request(account, "rest", Message{Text: "a\U0001F600b", Styles: []Style{{Start: 0, Length: 4, Style: "BOLD"}}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	req := Request(account, "rest", mustValid(t, Message{Text: "a\U0001F600b", Styles: []Style{{Start: 0, Length: 4, Style: "BOLD"}}}))
 	if !strings.HasPrefix(req.Message, "**") {
 		t.Errorf("message = %q", req.Message)
 	}
 }
 
 func TestRequestMentionsAndStylesConflict(t *testing.T) {
-	_, err := Request(account, "rest", Message{
+	err := validateErr(Message{
 		Text:     "hi",
 		Mentions: []Mention{{0, 1, "u"}},
 		Styles:   []Style{{0, 1, "BOLD"}},
@@ -101,14 +103,11 @@ func TestRequestMentionsAndStylesConflict(t *testing.T) {
 }
 
 func TestRequestQuoteAndMentions(t *testing.T) {
-	req, err := Request(account, "rest", Message{
+	req := Request(account, "rest", mustValid(t, Message{
 		Text:     "@ hi",
 		Quote:    &Quote{Timestamp: 1763114300000, Author: "+4915187654321", Text: "orig"},
 		Mentions: []Mention{{0, 1, "uuid-1"}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	}))
 	if req.QuoteTimestamp == nil || *req.QuoteTimestamp != 1763114300000 || *req.QuoteAuthor != "+4915187654321" || *req.QuoteMessage != "orig" {
 		t.Errorf("quote = %+v", req)
 	}
@@ -118,31 +117,25 @@ func TestRequestQuoteAndMentions(t *testing.T) {
 }
 
 func TestRequestQuoteWithoutTextOmitsQuoteMessage(t *testing.T) {
-	req, err := Request(account, "rest", Message{Text: "x", Quote: &Quote{Timestamp: 5, Author: "a"}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	req := Request(account, "rest", mustValid(t, Message{Text: "x", Quote: &Quote{Timestamp: 5, Author: "a"}}))
 	if req.QuoteMessage != nil {
 		t.Errorf("quote message = %q", *req.QuoteMessage)
 	}
 }
 
 func TestRequestQuoteNeedsAuthor(t *testing.T) {
-	_, err := Request(account, "rest", Message{Text: "x", Quote: &Quote{Timestamp: 5}})
+	err := validateErr(Message{Text: "x", Quote: &Quote{Timestamp: 5}})
 	if got := validationText(t, err); got != "quote.author: required" {
 		t.Errorf("got %q", got)
 	}
 }
 
 func TestRequestAttachmentsBecomeDataURIs(t *testing.T) {
-	req, err := Request(account, "rest", Message{Attachments: []File{
+	req := Request(account, "rest", mustValid(t, Message{Attachments: []File{
 		{ContentType: "image/png", Filename: "a.png", Data: "aGk="},
 		{ContentType: "text/plain", Data: "aGk="},
 		{Filename: "b.bin", Data: "aGk="},
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	}}))
 	want := []string{
 		"data:image/png;filename=a.png;base64,aGk=",
 		"data:text/plain;base64,aGk=",
@@ -154,7 +147,7 @@ func TestRequestAttachmentsBecomeDataURIs(t *testing.T) {
 }
 
 func TestRequestInvalidBase64(t *testing.T) {
-	_, err := Request(account, "rest", Message{Attachments: []File{{ContentType: "image/png", Data: "aGk="}, {ContentType: "image/png", Data: "!!!"}}})
+	err := validateErr(Message{Attachments: []File{{ContentType: "image/png", Data: "aGk="}, {ContentType: "image/png", Data: "!!!"}}})
 	if got := validationText(t, err); got != "attachments[1].data: invalid base64" {
 		t.Errorf("got %q", got)
 	}
@@ -176,12 +169,12 @@ func TestValidateContentRules(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := validationText(t, Validate(c.m)); got != c.want {
+			if got := validationText(t, validateErr(c.m)); got != c.want {
 				t.Errorf("got %q want %q", got, c.want)
 			}
 		})
 	}
-	if err := Validate(Message{Poll: &Poll{Question: "q", Options: []string{"a", "b"}}}); err != nil {
+	if err := validateErr(Message{Poll: &Poll{Question: "q", Options: []string{"a", "b"}}}); err != nil {
 		t.Errorf("valid poll: %v", err)
 	}
 }
@@ -212,7 +205,7 @@ func TestDeliverSend(t *testing.T) {
 	defer srv.Close()
 	c := upstream.New(srv.URL, account)
 
-	res, err := Deliver(context.Background(), c, "rest", Message{Text: "hi"})
+	res, err := Deliver(context.Background(), c, "rest", mustValid(t, Message{Text: "hi"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +228,7 @@ func TestDeliverPoll(t *testing.T) {
 	defer srv.Close()
 	c := upstream.New(srv.URL, account)
 
-	res, err := Deliver(context.Background(), c, "rest", Message{Poll: &Poll{Question: "Merge?", Options: []string{"yes", "no"}}})
+	res, err := Deliver(context.Background(), c, "rest", mustValid(t, Message{Poll: &Poll{Question: "Merge?", Options: []string{"yes", "no"}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,17 +237,6 @@ func TestDeliverPoll(t *testing.T) {
 	}
 	if res.Timestamp != 1769271479 || len(res.Timestamps) != 1 || len(res.Failures) != 0 {
 		t.Errorf("res = %+v", res)
-	}
-}
-
-func TestDeliverValidationFailsBeforeUpstream(t *testing.T) {
-	hits := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hits++ }))
-	defer srv.Close()
-	_, err := Deliver(context.Background(), upstream.New(srv.URL, account), "rest", Message{})
-	validationText(t, err)
-	if hits != 0 {
-		t.Errorf("upstream hit %d times", hits)
 	}
 }
 
@@ -283,13 +265,13 @@ func TestValidateAttachmentFields(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := validationText(t, Validate(c.m)); got != c.want {
+			if got := validationText(t, validateErr(c.m)); got != c.want {
 				t.Errorf("got %q want %q", got, c.want)
 			}
 		})
 	}
 	ok := file("application/vnd.api+json", "report 1.pdf", "aGk=")
-	if err := Validate(ok); err != nil {
+	if err := validateErr(ok); err != nil {
 		t.Errorf("valid attachment: %v", err)
 	}
 }
@@ -310,15 +292,15 @@ func TestValidateTextQuoteAndMentionRanges(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := validationText(t, Validate(c.m)); got != c.want {
+			if got := validationText(t, validateErr(c.m)); got != c.want {
 				t.Errorf("got %q want %q", got, c.want)
 			}
 		})
 	}
-	if err := Validate(Message{Text: "\U0001F600 hi", Mentions: []Mention{{0, 2, "u"}}}); err != nil {
+	if err := validateErr(Message{Text: "\U0001F600 hi", Mentions: []Mention{{0, 2, "u"}}}); err != nil {
 		t.Errorf("surrogate pair mention: %v", err)
 	}
-	if err := Validate(Message{Text: " ", Attachments: []File{{Data: "aGk="}}}); err != nil {
+	if err := validateErr(Message{Text: " ", Attachments: []File{{Data: "aGk="}}}); err != nil {
 		t.Errorf("whitespace text with attachment: %v", err)
 	}
 }
