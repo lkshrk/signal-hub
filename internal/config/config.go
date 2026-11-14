@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -133,9 +134,13 @@ func (c *Config) applyDefaults() {
 	if c.Limits.MaxRequestBytes == 0 {
 		c.Limits.MaxRequestBytes = defaultMaxBody
 	}
+	replay := Duration(defaultReplay)
+	if c.Retention > 0 && c.Retention < replay {
+		replay = c.Retention
+	}
 	for i := range c.Consumers {
 		if c.Consumers[i].MaxReplayAge == 0 {
-			c.Consumers[i].MaxReplayAge = Duration(defaultReplay)
+			c.Consumers[i].MaxReplayAge = replay
 		}
 	}
 }
@@ -240,7 +245,9 @@ func (c *Config) validate(env Env) []error {
 				fail("%s.groups[%d]: %v", pre, j, err)
 				continue
 			}
-			con.GroupIDs = append(con.GroupIDs, id)
+			if !slices.Contains(con.GroupIDs, id) {
+				con.GroupIDs = append(con.GroupIDs, id)
+			}
 			if owner, ok := groupOwner[id]; ok && owner != con.Name {
 				fail("group %s is listed by consumers %q and %q", id, owner, con.Name)
 			} else if !ok {

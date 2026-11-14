@@ -58,10 +58,9 @@ consumers:
     groups: ["` + groupID(2) + `"]
 `,
 		files: map[string]string{
-			accountPath:          botNumber + "\n",
-			tokenDir + "/dsh":    strings.Repeat("a", 32),
-			tokenDir + "/ops":    strings.Repeat("b", 32) + "\n",
-			tokenDir + "/hermes": "",
+			accountPath:       botNumber + "\n",
+			tokenDir + "/dsh": strings.Repeat("a", 32),
+			tokenDir + "/ops": strings.Repeat("b", 32) + "\n",
 		},
 		env: map[string]string{},
 	}
@@ -81,7 +80,7 @@ func (f *fixture) parse() (*Config, error) {
 		ReadFile: func(p string) ([]byte, error) {
 			f.reads = append(f.reads, p)
 			s, ok := f.files[p]
-			if !ok || (p == tokenDir+"/hermes") {
+			if !ok {
 				return nil, &fs.PathError{Op: "open", Path: p, Err: fs.ErrNotExist}
 			}
 			return []byte(s), nil
@@ -192,13 +191,12 @@ func TestAccountSources(t *testing.T) {
 		upstream     string
 		env          string
 		want         string
-		accountRead  bool
 		wantFileRead bool
 	}{
-		{"account only", "  account: " + botNumber, "", botNumber, false, false},
-		{"accountFile only", "  accountFile: " + accountPath, "", botNumber, true, true},
-		{"env over accountFile", "  accountFile: " + accountPath, other, other, false, false},
-		{"env over account", "  account: " + botNumber, other, other, false, false},
+		{"account only", "  account: " + botNumber, "", botNumber, false},
+		{"accountFile only", "  accountFile: " + accountPath, "", botNumber, true},
+		{"env over accountFile", "  accountFile: " + accountPath, other, other, false},
+		{"env over account", "  account: " + botNumber, other, other, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -470,5 +468,39 @@ consumers:
 	}
 	if cfg.Upstream.ResolvedAccount != "+4915100000000" {
 		t.Errorf("ResolvedAccount = %q", cfg.Upstream.ResolvedAccount)
+	}
+}
+
+func TestMaxReplayAgeDefaultFollowsRetention(t *testing.T) {
+	f := newFixture()
+	f.replace(t, "retention: 14d", "retention: 12h")
+	f.replace(t, "    maxReplayAge: 7d\n", "")
+	cfg, err := f.parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cfg.Consumers {
+		if time.Duration(c.MaxReplayAge) != 12*time.Hour {
+			t.Errorf("%s MaxReplayAge = %v", c.Name, time.Duration(c.MaxReplayAge))
+		}
+	}
+
+	f = newFixture()
+	f.replace(t, "retention: 14d", "retention: 12h")
+	_, err = f.parse()
+	if err == nil || !strings.Contains(err.Error(), "consumers[0].maxReplayAge: must not exceed retention") {
+		t.Errorf("explicit maxReplayAge over retention: err = %v", err)
+	}
+}
+
+func TestGroupIDsAreDeduplicated(t *testing.T) {
+	f := newFixture()
+	f.replace(t, `groups: ["`+groupID(0)+`"]`, `groups: ["`+groupID(0)+`", "`+restID(groupID(0))+`"]`)
+	cfg, err := f.parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Consumers[0].GroupIDs; len(got) != 1 || got[0] != groupID(0) {
+		t.Errorf("GroupIDs = %v", got)
 	}
 }
