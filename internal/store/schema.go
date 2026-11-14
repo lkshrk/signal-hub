@@ -45,7 +45,7 @@ type positionRow struct {
 }
 
 func migrateUp(ctx context.Context, db *bun.DB) error {
-	m := migrate.NewMigrator(db, migrations)
+	m := migrate.NewMigrator(db, migrations, migrate.WithMarkAppliedOnSuccess(true))
 	if err := m.Init(ctx); err != nil {
 		return fmt.Errorf("init migrations: %w", err)
 	}

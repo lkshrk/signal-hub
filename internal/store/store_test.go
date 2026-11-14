@@ -2,10 +2,12 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -355,6 +357,7 @@ func TestConcurrentIngestPullPruneNoBusy(t *testing.T) {
 	var bg sync.WaitGroup
 	stop := make(chan struct{})
 	errs := make(chan error, 64)
+	var pruned atomic.Int64
 	report := func(err error) {
 		select {
 		case errs <- err:
@@ -365,9 +368,9 @@ func TestConcurrentIngestPullPruneNoBusy(t *testing.T) {
 	done.Add(1)
 	go func() {
 		defer done.Done()
-		now := time.Now()
+		old := time.Now().Add(-time.Hour)
 		for i := int64(1); i <= total; i++ {
-			if _, _, err := s.Append(ctx, entry("dsh", message.KindMessage, i, now)); err != nil {
+			if _, _, err := s.Append(ctx, entry("dsh", message.KindMessage, i, old)); err != nil {
 				report(err)
 				return
 			}
@@ -389,6 +392,18 @@ func TestConcurrentIngestPullPruneNoBusy(t *testing.T) {
 					report(err)
 					return
 				}
+				prev := after
+				for _, r := range p.Records {
+					if r.Seq <= prev {
+						report(fmt.Errorf("seq %d not above %d", r.Seq, prev))
+						return
+					}
+					prev = r.Seq
+				}
+				if p.Next < after {
+					report(fmt.Errorf("next went back from %d to %d", after, p.Next))
+					return
+				}
 				after = p.Next
 			}
 		}()
@@ -402,10 +417,12 @@ func TestConcurrentIngestPullPruneNoBusy(t *testing.T) {
 				return
 			case <-time.After(10 * time.Millisecond):
 			}
-			if _, err := s.Prune(ctx, time.Unix(0, 0)); err != nil {
+			n, err := s.Prune(ctx, time.Now())
+			if err != nil {
 				report(err)
 				return
 			}
+			pruned.Add(n)
 		}
 	}()
 	go func() {
@@ -432,7 +449,65 @@ func TestConcurrentIngestPullPruneNoBusy(t *testing.T) {
 	for err := range errs {
 		t.Errorf("goroutine error: %v", err)
 	}
+	if pruned.Load() == 0 {
+		t.Error("prune never deleted a row")
+	}
 	if head, err := s.Head(ctx); err != nil || head != total {
 		t.Fatalf("Head = %d, %v", head, err)
+	}
+	if seq := mustAppend(t, s, entry("dsh", message.KindMessage, total+1, time.Now())); seq <= total {
+		t.Fatalf("fresh append got seq %d", seq)
+	}
+}
+
+func TestAttachmentEmptyConsumerMeansUnclaimed(t *testing.T) {
+	s := openStore(t)
+	ctx := context.Background()
+	mustAppend(t, s, attachmentEntry("", message.KindMessage, 1, time.Now(), "free"))
+	mustAppend(t, s, attachmentEntry("dsh", message.KindMessage, 2, time.Now(), "owned"))
+	if _, ok, err := s.Attachment(ctx, "", "free"); err != nil || !ok {
+		t.Fatalf("unclaimed lookup = %v, %v", ok, err)
+	}
+	if _, ok, _ := s.Attachment(ctx, "", "owned"); ok {
+		t.Fatal("empty consumer can see a claimed attachment")
+	}
+}
+
+func TestAppendDuplicateAttachmentIDsStoreFirst(t *testing.T) {
+	s := openStore(t)
+	ctx := context.Background()
+	e := entry("dsh", message.KindMessage, 1, time.Now())
+	e.Parsed.Attachments = []message.AttachmentRef{
+		{ID: "x", ContentType: "image/png", Filename: "first.png", Size: 1},
+		{ID: "x", ContentType: "image/jpeg", Filename: "second.jpg", Size: 2},
+	}
+	mustAppend(t, s, e)
+	meta, ok, err := s.Attachment(ctx, "dsh", "x")
+	if err != nil || !ok || meta.Filename != "first.png" {
+		t.Fatalf("meta = %+v, %v, %v", meta, ok, err)
+	}
+}
+
+func TestSetPositionRejectsNegative(t *testing.T) {
+	s := openStore(t)
+	if err := s.SetPosition(context.Background(), "dsh", ChannelEvents, -1); err == nil {
+		t.Fatal("negative position accepted")
+	}
+}
+
+func TestReadLimitLoadsRawOnlyForReturned(t *testing.T) {
+	s := openStore(t)
+	now := time.Now()
+	for i := int64(1); i <= 4; i++ {
+		mustAppend(t, s, entry("dsh", message.KindMessage, i, now))
+	}
+	p, err := s.Read(context.Background(), Query{Consumer: "dsh", Limit: 2})
+	if err != nil || len(p.Records) != 2 {
+		t.Fatalf("page = %+v, %v", p, err)
+	}
+	for _, r := range p.Records {
+		if string(r.Raw) != `{"envelope":{}}` {
+			t.Fatalf("raw = %q", r.Raw)
+		}
 	}
 }

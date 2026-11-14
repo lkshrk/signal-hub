@@ -92,7 +92,6 @@ func (s *Store) Append(ctx context.Context, e Entry) (int64, bool, error) {
 	if row.Raw == nil {
 		row.Raw = []byte{}
 	}
-	var inserted bool
 	err := s.wdb.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		if _, err := tx.NewInsert().Model(&row).Exec(ctx); err != nil {
 			if isUniqueViolation(err) {
@@ -100,13 +99,17 @@ func (s *Store) Append(ctx context.Context, e Entry) (int64, bool, error) {
 			}
 			return err
 		}
-		inserted = true
 		if len(e.Parsed.Attachments) == 0 {
 			return nil
 		}
-		rows := make([]attachmentRow, len(e.Parsed.Attachments))
-		for i, a := range e.Parsed.Attachments {
-			rows[i] = attachmentRow{ID: a.ID, Seq: row.Seq, Consumer: row.Consumer, ContentType: a.ContentType, Filename: a.Filename, Size: a.Size}
+		rows := make([]attachmentRow, 0, len(e.Parsed.Attachments))
+		seen := map[string]bool{}
+		for _, a := range e.Parsed.Attachments {
+			if seen[a.ID] {
+				continue
+			}
+			seen[a.ID] = true
+			rows = append(rows, attachmentRow{ID: a.ID, Seq: row.Seq, Consumer: row.Consumer, ContentType: a.ContentType, Filename: a.Filename, Size: a.Size})
 		}
 		_, err := tx.NewInsert().Model(&rows).Exec(ctx)
 		return err
@@ -116,9 +119,6 @@ func (s *Store) Append(ctx context.Context, e Entry) (int64, bool, error) {
 	}
 	if err != nil {
 		return 0, false, err
-	}
-	if !inserted {
-		return 0, true, nil
 	}
 	s.mu.Lock()
 	close(s.changed)
@@ -138,14 +138,14 @@ func (s *Store) Head(ctx context.Context) (int64, error) {
 }
 
 func (s *Store) Oldest(ctx context.Context) (int64, error) {
-	var min sql.NullInt64
-	if err := s.rdb.NewSelect().Model((*messageRow)(nil)).ColumnExpr("MIN(seq)").Scan(ctx, &min); err != nil {
+	var lowest sql.NullInt64
+	if err := s.rdb.NewSelect().Model((*messageRow)(nil)).ColumnExpr("MIN(seq)").Scan(ctx, &lowest); err != nil {
 		return 0, err
 	}
-	if !min.Valid {
+	if !lowest.Valid {
 		return 0, nil
 	}
-	return min.Int64 - 1, nil
+	return lowest.Int64 - 1, nil
 }
 
 func (s *Store) Position(ctx context.Context, consumer, channel string) (int64, bool, error) {
@@ -161,6 +161,9 @@ func (s *Store) Position(ctx context.Context, consumer, channel string) (int64, 
 }
 
 func (s *Store) SetPosition(ctx context.Context, consumer, channel string, seq int64) error {
+	if seq < 0 {
+		return fmt.Errorf("position %d is negative", seq)
+	}
 	row := positionRow{Consumer: consumer, Channel: channel, Seq: seq, UpdatedAt: time.Now().UnixMilli()}
 	_, err := s.wdb.NewInsert().Model(&row).
 		On("CONFLICT (consumer, channel) DO UPDATE").
@@ -194,7 +197,13 @@ func (s *Store) Prune(ctx context.Context, before time.Time) (int64, error) {
 
 func (s *Store) Attachment(ctx context.Context, consumer, id string) (AttachmentMeta, bool, error) {
 	var row attachmentRow
-	err := s.rdb.NewSelect().Model(&row).Where("id = ?", id).Where("consumer = ?", consumer).Order("seq DESC").Limit(1).Scan(ctx)
+	sel := s.rdb.NewSelect().Model(&row).Where("id = ?", id)
+	if consumer == "" {
+		sel = sel.Where("consumer IS NULL")
+	} else {
+		sel = sel.Where("consumer = ?", consumer)
+	}
+	err := sel.Order("seq DESC").Limit(1).Scan(ctx)
 	if errors.Is(err, sql.ErrNoRows) {
 		return AttachmentMeta{}, false, nil
 	}
