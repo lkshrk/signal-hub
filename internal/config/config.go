@@ -77,7 +77,8 @@ type Consumer struct {
 }
 
 type Compat struct {
-	Listen string `yaml:"listen"`
+	Listen        string `yaml:"listen"`
+	AttachmentDir string `yaml:"attachmentDir"`
 }
 
 type Env struct {
@@ -286,6 +287,9 @@ func (c *Config) validate(env Env) []error {
 				fail("%s.compat.listen: %q is already used", pre, l)
 			default:
 				listens[l] = true
+			}
+			if d := con.Compat.AttachmentDir; d != "" && !filepath.IsAbs(d) {
+				fail("%s.compat.attachmentDir: must be an absolute path", pre)
 			}
 		}
 

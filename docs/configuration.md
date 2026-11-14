@@ -38,6 +38,7 @@ Durations use Go syntax (`90s`, `10m`, `24h`) or whole days (`7d`).
 | `senders` | | E.164 numbers or UUIDs (lower-cased); apply to direct messages only |
 | `maxReplayAge` | `min(24h, retention)` | greater than 0 and at most `retention` |
 | `compat.listen` | off | enables the signal-cli daemon contract on that address, no auth |
+| `compat.attachmentDir` | empty | absolute directory that compat `send` may read local attachment paths from; empty refuses every local path |
 
 Each consumer lists at least one group or sender. A group or sender belongs to at most one consumer, compared after normalization. `listen`, `adminListen` and every `compat.listen` must be distinct. Group messages route by group only.
 

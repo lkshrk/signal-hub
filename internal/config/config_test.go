@@ -54,6 +54,7 @@ consumers:
     senders: ["+4915187654321"]
     compat:
       listen: ":8091"
+      attachmentDir: /data/hermes-out
   - name: ops
     groups: ["` + groupID(2) + `"]
 `,
@@ -139,7 +140,7 @@ func TestParseExampleConfig(t *testing.T) {
 	if time.Duration(dsh.MaxReplayAge) != 7*24*time.Hour {
 		t.Errorf("dsh MaxReplayAge = %v", time.Duration(dsh.MaxReplayAge))
 	}
-	if hermes.Compat == nil || hermes.Compat.Listen != ":8091" || hermes.Token != "" {
+	if hermes.Compat == nil || hermes.Compat.Listen != ":8091" || hermes.Compat.AttachmentDir != "/data/hermes-out" || hermes.Token != "" {
 		t.Errorf("hermes compat = %+v, token = %q", hermes.Compat, hermes.Token)
 	}
 	if len(hermes.GroupIDs) != 1 || hermes.GroupIDs[0] != "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=" {
@@ -296,6 +297,9 @@ func TestValidationErrors(t *testing.T) {
 		{"admin listen clash", func(t *testing.T, f *fixture) {
 			f.replace(t, "retention: 14d", "retention: 14d\nadminListen: \":8080\"")
 		}, `adminListen: ":8080" is already used`},
+		{"compat attachmentDir relative", func(t *testing.T, f *fixture) {
+			f.replace(t, "attachmentDir: /data/hermes-out", "attachmentDir: data/hermes-out")
+		}, "consumers[1].compat.attachmentDir: must be an absolute path"},
 		{"compat listen empty", func(t *testing.T, f *fixture) { f.replace(t, `listen: ":8091"`, `listen: ""`) }, "consumers[1].compat.listen: required"},
 		{"unknown key", func(t *testing.T, f *fixture) { f.yaml += "foo: 1\n" }, "field foo not found"},
 		{"token missing", func(t *testing.T, f *fixture) { delete(f.files, tokenDir+"/dsh") }, "consumers[0]: token file"},

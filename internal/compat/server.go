@@ -24,6 +24,8 @@ type Server struct {
 	Now       func() time.Time
 	Keepalive time.Duration
 
+	AttachmentDir string
+
 	polls pollStore
 
 	waiting func()

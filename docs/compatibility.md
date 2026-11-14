@@ -23,7 +23,7 @@ The contract is verified against 23 recordings of the shim's own responses in `i
 
 - Error codes: -32700 parse error, -32602 invalid params, -32601 unsupported method, -32603 internal, 429 rate limited (upstream status 429 or a body containing `RateLimit`). Upstream errors read `<METHOD> <path> returned HTTP <code>: <first 300 bytes of the body>`.
 - `groupId` (the signal-cli internal id) maps to `group.` + base64 of the id. `textStyle`/`textStyles` ranges render as styled text; `quoteTimestamp` and `quoteAuthor` pass through.
-- Local `attachments` paths are inlined as data URIs. A path the hub cannot read fails with `read attachment <name>: <error>`.
+- Local `attachments` paths are inlined as data URIs. A missing path fails with `read attachment <name>: open <path>: no such file or directory`.
 - The last 256 polls created through compat mode are remembered for vote text. Polls are kept in memory, so a restart forgets them and votes fall back to `🗳️ Poll vote: option <n> (poll <ts>)`.
 
 ## Deliberate differences
@@ -33,7 +33,8 @@ The contract is verified against 23 recordings of the shim's own responses in `i
 | `method not supported by signal-shim: <m>` | `method not supported by signal-hub: <m>` |
 | Any recipient or group is forwarded | A target outside the consumer's groups and senders is refused with -32603 `recipient not allowed for consumer <name>`; nothing is sent |
 | `account` is forwarded as given | An `account` other than the hub's is refused with -32603 `account <x> is not served by this hub`; a missing one uses the hub's account without calling `/v1/accounts` |
-| `getAttachment` fetches any id | An id that is unknown or belongs to another consumer answers like an id upstream does not know, without calling upstream: -32603 `GET /v1/attachments/<id> returned HTTP 404: {"error":"No attachment with that name found"}` |
+| `send` reads any local attachment path the process can read | Only paths inside `compat.attachmentDir` are read, resolved with `Clean` and `EvalSymlinks` and opened through an `os.Root`, so `../` and symlinks that leave the directory are refused. Without `attachmentDir` every local path is refused. Relative paths are refused. Every refusal, and any read error, answers exactly like a missing file: `read attachment <name>: open <path>: no such file or directory` |
+| `getAttachment` fetches any id | An id that is unknown or belongs to another consumer answers like an id upstream does not know, without calling upstream: -32603 `GET /v1/attachments/<id> returned HTTP 404: {"error":"No attachment with that name found"}`. This also applies to ids upstream would have rejected as invalid names with HTTP 400 |
 | Events relay the upstream WebSocket and end when it drops | Events come from the log: the stream stays open while upstream is down, carries only the consumer's routed envelopes (all kinds, including receipts and typing), and resumes from the server-side position `compat` |
 | Missed events while disconnected are lost | Envelopes newer than the consumer's `maxReplayAge` are replayed on reconnect; older ones are skipped, logged as `messages missed` with channel `compat` and counted in `signal_hub_missed_total` |
 | `/api/v1/events` with any account | Another account is 404 `unknown account` |
@@ -44,10 +45,10 @@ None of the 23 recordings contain the bot number in an upstream error text, so n
 
 ## Migration
 
-1. Give the consumer a `compat.listen` address, for example `:8090`.
+1. Give the consumer a `compat.listen` address, for example `:8090`, and, if the client sends local attachments, a `compat.attachmentDir`.
 2. Point the client's `SIGNAL_HTTP_URL` at `http://<hub>:<compat port>`. Keep its account setting; it must equal the hub's account or be empty.
 3. Remove the shim sidecar.
 
-The hub reads local attachment paths for outgoing attachments, so a path must exist inside the hub's container. Today the Hermes sidecar shim cannot read Hermes' files either and fails with the same error.
+The hub reads local attachment paths for outgoing attachments, so a path must exist inside the hub's container, under `compat.attachmentDir`, and the client must send that same absolute path. Today the Hermes sidecar shim cannot read Hermes' files either and fails with the same error.
 
 On the first connect the stream starts at the log head, as the shim did. After that a reconnect resumes where the last stream stopped.

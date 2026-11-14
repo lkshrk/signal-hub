@@ -96,6 +96,7 @@ func (f *fakeUpstream) reset() {
 type fixture struct {
 	srv      *Server
 	http     *httptest.Server
+	dbPath   string
 	store    *store.Store
 	router   *route.Router
 	logs     *lockedBuffer
@@ -105,10 +106,11 @@ type fixture struct {
 }
 
 type fixtureOpts struct {
-	status       int
-	body         string
-	upstreamURL  string
-	maxReplayAge time.Duration
+	status        int
+	body          string
+	upstreamURL   string
+	maxReplayAge  time.Duration
+	attachmentDir string
 }
 
 func newFixture(t *testing.T, o fixtureOpts) *fixture {
@@ -120,7 +122,8 @@ func newFixture(t *testing.T, o fixtureOpts) *fixture {
 		o.maxReplayAge = 7 * 24 * time.Hour
 	}
 	ctx := context.Background()
-	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "hub.db"))
+	dbPath := filepath.Join(t.TempDir(), "hub.db")
+	st, err := store.Open(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +142,7 @@ func newFixture(t *testing.T, o fixtureOpts) *fixture {
 		url = o.upstreamURL
 	}
 	router := route.New(consumers, now, log, state)
-	f := &fixture{store: st, router: router, logs: logs, upstream: up, parked: make(chan struct{}, 64), exited: make(chan struct{}, 64)}
+	f := &fixture{dbPath: dbPath, store: st, router: router, logs: logs, upstream: up, parked: make(chan struct{}, 64), exited: make(chan struct{}, 64)}
 	f.srv = &Server{
 		Consumer: "hermes",
 		Store:    st,
@@ -148,6 +151,8 @@ func newFixture(t *testing.T, o fixtureOpts) *fixture {
 		Health:   state,
 		Log:      log,
 		Now:      now,
+
+		AttachmentDir: o.attachmentDir,
 	}
 	f.srv.waiting = func() {
 		select {
@@ -463,6 +468,9 @@ func TestEventsSkipOlderThanMaxReplayAge(t *testing.T) {
 	st := f.openStream(t, eventsPath)
 	st.next(t)
 	f.awaitParked(t)
+	if pos, ok, err := f.store.Position(context.Background(), "hermes", store.ChannelCompat); err != nil || !ok || pos != 1 {
+		t.Fatalf("position after skip = %d %v %v", pos, ok, err)
+	}
 	fresh := envelopeFixture(t, "receipt")
 	f.appendFrame(t, fresh, baseTime)
 	if got := st.next(t); got != "data: "+string(compact(fresh))+"\n\n" {
@@ -501,5 +509,98 @@ func TestEventsKeepalive(t *testing.T) {
 		}
 	case <-time.After(wait):
 		t.Fatal("no keepalive")
+	}
+}
+
+func missingFile(path string) string {
+	return "read attachment " + filepath.Base(path) + ": open " + path + ": no such file or directory"
+}
+
+func sendAttachment(t *testing.T, f *fixture, path string) rpcReply {
+	t.Helper()
+	return f.call(t, "send", map[string]any{"account": botNumber, "recipient": []any{sender}, "message": "see file", "attachments": []any{path}})
+}
+
+func TestAttachmentWithoutDirRefusesEveryPath(t *testing.T) {
+	f := newFixture(t, fixtureOpts{status: http.StatusCreated, body: `[{"timestamp":"1"}]`})
+	expectError(t, sendAttachment(t, f, f.dbPath), -32603, missingFile(f.dbPath))
+	if calls := f.upstream.taken(); len(calls) != 0 {
+		t.Fatalf("upstream called: %+v", calls)
+	}
+}
+
+func TestAttachmentInsideDirIsInlined(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sub", "note.txt")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := newFixture(t, fixtureOpts{status: http.StatusCreated, body: `[{"timestamp":"1"}]`, attachmentDir: dir})
+	if r := sendAttachment(t, f, path); r.Error != nil {
+		t.Fatalf("error %+v", r.Error)
+	}
+	calls := f.upstream.taken()
+	if len(calls) != 1 {
+		t.Fatalf("calls = %+v", calls)
+	}
+	var body struct {
+		Attachments []string `json:"base64_attachments"`
+	}
+	if err := json.Unmarshal(calls[0].Body, &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Attachments) != 1 || body.Attachments[0] != "data:text/plain;filename=note.txt;base64,aGVsbG8=" {
+		t.Fatalf("attachments = %v", body.Attachments)
+	}
+}
+
+func TestAttachmentEscapesRefused(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "out")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(root, "secret.txt")
+	if err := os.WriteFile(secret, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.txt")
+	if err := os.Symlink(secret, link); err != nil {
+		t.Fatal(err)
+	}
+	dirLink := filepath.Join(dir, "up")
+	if err := os.Symlink(root, dirLink); err != nil {
+		t.Fatal(err)
+	}
+	f := newFixture(t, fixtureOpts{status: http.StatusCreated, body: `[{"timestamp":"1"}]`, attachmentDir: dir})
+	for _, p := range []string{
+		dir + "/../secret.txt",
+		link,
+		filepath.Join(dirLink, "secret.txt"),
+		"secret.txt",
+		f.dbPath,
+	} {
+		expectError(t, sendAttachment(t, f, p), -32603, missingFile(p))
+	}
+	if calls := f.upstream.taken(); len(calls) != 0 {
+		t.Fatalf("upstream called: %+v", calls)
+	}
+}
+
+func TestUpstreamErrorRedactsAccount(t *testing.T) {
+	f := newFixture(t, fixtureOpts{status: http.StatusBadRequest, body: `{"error":"account +4915112345678 is not registered"}`})
+	r := f.call(t, "sendTyping", map[string]any{"account": botNumber, "groupId": hermesGroup})
+	expectError(t, r, -32603, `PUT /v1/typing-indicator/<account> returned HTTP 400: {"error":"account <account> is not registered"}`)
+}
+
+func TestCheckUnreachableUpstream(t *testing.T) {
+	f := newFixture(t, fixtureOpts{upstreamURL: "http://127.0.0.1:1"})
+	status, ct, body := f.get(t, "/api/v1/check")
+	if status != http.StatusBadGateway || ct != "text/plain; charset=utf-8" ||
+		!strings.HasPrefix(body, "GET /v1/about: dial tcp 127.0.0.1:1: ") || !strings.HasSuffix(body, "\n") || strings.Contains(body, `Get "`) {
+		t.Fatalf("status %d %q %q", status, ct, body)
 	}
 }

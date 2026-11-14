@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"mime"
 	"net/http"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/lkshrk/signal-hub/internal/styles"
 )
@@ -82,7 +84,7 @@ func (s *Server) send(ctx context.Context, p map[string]any) (any, error) {
 	if paths, ok := p["attachments"].([]any); ok && len(paths) > 0 {
 		encoded := make([]string, 0, len(paths))
 		for _, raw := range paths {
-			a, err := encodeAttachment(str(raw))
+			a, err := encodeAttachment(s.AttachmentDir, str(raw))
 			if err != nil {
 				return nil, err
 			}
@@ -206,8 +208,8 @@ func textStyles(p map[string]any) []string {
 	return out
 }
 
-func encodeAttachment(path string) (string, error) {
-	data, err := os.ReadFile(path)
+func encodeAttachment(dir, path string) (string, error) {
+	data, err := readAttachment(dir, path)
 	if err != nil {
 		return "", fmt.Errorf("read attachment %s: %w", filepath.Base(path), err)
 	}
@@ -219,6 +221,36 @@ func encodeAttachment(path string) (string, error) {
 		ct = ct[:i]
 	}
 	return fmt.Sprintf("data:%s;filename=%s;base64,%s", ct, filepath.Base(path), base64.StdEncoding.EncodeToString(data)), nil
+}
+
+// readAttachment answers every refusal like a missing file, so a caller cannot probe what exists outside dir.
+func readAttachment(dir, path string) ([]byte, error) {
+	missing := &fs.PathError{Op: "open", Path: path, Err: syscall.ENOENT}
+	if dir == "" || !filepath.IsAbs(path) {
+		return nil, missing
+	}
+	base, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return nil, missing
+	}
+	real, err := filepath.EvalSymlinks(filepath.Clean(path))
+	if err != nil {
+		return nil, missing
+	}
+	rel, err := filepath.Rel(base, real)
+	if err != nil || !filepath.IsLocal(rel) {
+		return nil, missing
+	}
+	root, err := os.OpenRoot(base)
+	if err != nil {
+		return nil, missing
+	}
+	defer func() { _ = root.Close() }()
+	data, err := root.ReadFile(rel)
+	if err != nil {
+		return nil, missing
+	}
+	return data, nil
 }
 
 func compact(data []byte) []byte {

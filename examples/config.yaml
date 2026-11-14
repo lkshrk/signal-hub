@@ -22,3 +22,4 @@ consumers:
     maxReplayAge: 10m
     compat:
       listen: ":8091"
+      attachmentDir: /data/hermes-out
