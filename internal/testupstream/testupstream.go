@@ -22,6 +22,7 @@ type Server struct {
 	stall    atomic.Int64
 	closed   chan websocket.StatusCode
 	wg       sync.WaitGroup
+	rest     atomic.Pointer[http.Handler]
 }
 
 func New(t testing.TB, sessions ...Session) *Server {
@@ -34,6 +35,10 @@ func New(t testing.TB, sessions ...Session) *Server {
 	s.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.wg.Add(1)
 		defer s.wg.Done()
+		if h := s.rest.Load(); h != nil && !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+			(*h).ServeHTTP(w, r)
+			return
+		}
 		n := int(s.dials.Add(1)) - 1
 		if s.stall.Add(-1) >= 0 {
 			<-ctx.Done()
@@ -52,6 +57,11 @@ func New(t testing.TB, sessions ...Session) *Server {
 }
 
 func (s *Server) URL() string { return "ws" + strings.TrimPrefix(s.srv.URL, "http") }
+
+func (s *Server) HTTPURL() string { return s.srv.URL }
+
+// HandleHTTP serves plain (non-upgrade) requests with h, so one server can fake both the WebSocket and REST sides.
+func (s *Server) HandleHTTP(h http.Handler) { s.rest.Store(&h) }
 
 func (s *Server) StallUpgrades(n int) { s.stall.Store(int64(n)) }
 

@@ -2,6 +2,8 @@ package testupstream
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"testing"
 	"time"
 
@@ -79,5 +81,31 @@ func TestStallNeverAnswersPings(t *testing.T) {
 	defer cancel()
 	if err := c.Ping(ctx); err == nil {
 		t.Fatal("ping should time out")
+	}
+}
+
+func TestHandleHTTPServesPlainRequestsBesideTheSocket(t *testing.T) {
+	s := New(t, Write([]byte("frame")))
+	s.HandleHTTP(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("rest " + r.URL.Path))
+	}))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, s.HTTPURL()+"/v1/about", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	if string(body) != "rest /v1/about" {
+		t.Fatalf("body = %q", body)
+	}
+	if b, err := read(t, dial(t, s)); err != nil || string(b) != "frame" {
+		t.Fatalf("socket: %q, %v", b, err)
+	}
+	if s.Dials() != 1 {
+		t.Fatalf("dials = %d, want 1", s.Dials())
 	}
 }
