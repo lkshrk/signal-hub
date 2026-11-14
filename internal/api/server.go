@@ -8,6 +8,7 @@ import (
 
 	"github.com/lkshrk/signal-hub/internal/health"
 	"github.com/lkshrk/signal-hub/internal/message"
+	"github.com/lkshrk/signal-hub/internal/replay"
 	"github.com/lkshrk/signal-hub/internal/route"
 	"github.com/lkshrk/signal-hub/internal/store"
 	"github.com/lkshrk/signal-hub/internal/upstream"
@@ -25,6 +26,8 @@ type Server struct {
 	MaxBody   int64
 	MaxWait   time.Duration
 	Keepalive time.Duration
+
+	waiting func()
 }
 
 type PullResponse struct {
@@ -39,6 +42,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/messages", s.pull)
 	mux.HandleFunc("GET /v1/attachments/{id}", s.attachment)
 	return s.authenticate(mux)
+}
+
+func (s *Server) replayer() *replay.Replayer {
+	return &replay.Replayer{Store: s.Store, Router: s.Router, Health: s.Health, Log: s.Log, Now: s.Now}
 }
 
 func (s *Server) maxWait() time.Duration {

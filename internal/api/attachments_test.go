@@ -69,3 +69,18 @@ func TestAttachmentUpstreamErrorIs502(t *testing.T) {
 		t.Fatalf("logs: %s", logs)
 	}
 }
+
+func TestAttachmentFallsBackToStoredSize(t *testing.T) {
+	f := newFixture(t)
+	f.append(t, "dsh", "direct_attachment", baseTime.Add(-time.Hour))
+	payload := bytes.Repeat([]byte("j"), 48213)
+	f.upstream.set(http.StatusOK, payload)
+	f.upstream.mu.Lock()
+	f.upstream.noLen = true
+	f.upstream.mu.Unlock()
+
+	res := f.get(t, dshToken, "/v1/attachments/x1y2.jpg")
+	if res.StatusCode != 200 || res.Header.Get("Content-Length") != "48213" || len(res.Body) != 48213 {
+		t.Fatalf("%d cl=%q len=%d", res.StatusCode, res.Header.Get("Content-Length"), len(res.Body))
+	}
+}

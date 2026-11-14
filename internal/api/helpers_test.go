@@ -67,6 +67,7 @@ type fakeUpstream struct {
 	mu     sync.Mutex
 	status int
 	body   []byte
+	noLen  bool
 	hits   int
 }
 
@@ -82,7 +83,9 @@ func newFakeUpstream(t *testing.T) *fakeUpstream {
 			return
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Length", strconv.Itoa(len(f.body)))
+		if !f.noLen {
+			w.Header().Set("Content-Length", strconv.Itoa(len(f.body)))
+		}
 		_, _ = w.Write(f.body)
 	}))
 	t.Cleanup(f.Close)

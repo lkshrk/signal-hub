@@ -60,7 +60,7 @@ func (s *Server) pull(w http.ResponseWriter, r *http.Request) {
 	after := p.after
 	if !p.hasAfter {
 		if after, err = s.Store.Head(ctx); err != nil {
-			s.fail(w, consumer, "head", err)
+			s.fail(w, r, "head", err)
 			return
 		}
 	}
@@ -69,15 +69,15 @@ func (s *Server) pull(w http.ResponseWriter, r *http.Request) {
 	out := PullResponse{Messages: []message.Message{}}
 	for {
 		changed := s.Store.Changed()
-		res, err := s.replay(ctx, consumer, channelPull, after, message.Deliverable, p.limit)
+		res, err := s.replayer().Read(ctx, consumer, channelPull, after, message.Deliverable, p.limit)
 		if err != nil {
-			s.fail(w, consumer, "read", err)
+			s.fail(w, r, "read", err)
 			return
 		}
-		out.Missed += res.missed
-		out.Reset = out.Reset || res.reset
-		after, out.Next = res.next, res.next
-		for _, rec := range res.records {
+		out.Missed += res.Missed
+		out.Reset = out.Reset || res.Reset
+		after, out.Next = res.Next, res.Next
+		for _, rec := range res.Records {
 			m, err := message.Build(rec.Seq, rec.ReceivedAt, rec.Raw)
 			if err != nil {
 				s.Log.Error("message build failed", "consumer", consumer, "seq", rec.Seq)
@@ -87,6 +87,9 @@ func (s *Server) pull(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(out.Messages) > 0 || p.wait == 0 {
 			break
+		}
+		if s.waiting != nil {
+			s.waiting()
 		}
 		select {
 		case <-changed:
@@ -101,7 +104,10 @@ func (s *Server) pull(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) fail(w http.ResponseWriter, consumer, op string, err error) {
-	s.Log.Error("request failed", "consumer", consumer, "op", op, "error", err)
+func (s *Server) fail(w http.ResponseWriter, r *http.Request, op string, err error) {
+	if r.Context().Err() != nil {
+		return
+	}
+	s.Log.Error("request failed", "consumer", consumerFrom(r.Context()), "op", op, "error", err)
 	writeError(w, http.StatusInternalServerError, "internal error")
 }

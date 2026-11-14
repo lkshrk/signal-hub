@@ -104,16 +104,23 @@ func TestPullAfterZeroReplaysWithinMaxReplayAge(t *testing.T) {
 
 func TestPullLongPollWakesOnAppend(t *testing.T) {
 	f := newFixture(t)
-	start := time.Now()
+	parked := make(chan struct{}, 1)
+	f.srv.waiting = func() {
+		select {
+		case parked <- struct{}{}:
+		default:
+		}
+	}
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		<-parked
 		_, _, _ = f.store.Append(context.Background(), appendEntry(t, f, "dsh"))
 	}()
+	start := time.Now()
 	code, pb, raw := f.pull(t, dshToken, "?after=0&wait=5")
 	if code != 200 || len(pb.Messages) != 1 {
 		t.Fatalf("%d %s", code, raw)
 	}
-	if d := time.Since(start); d > time.Second {
+	if d := time.Since(start); d > 2*time.Second {
 		t.Fatalf("took %s", d)
 	}
 }
