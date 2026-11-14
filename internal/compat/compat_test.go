@@ -111,6 +111,7 @@ type fixtureOpts struct {
 	upstreamURL   string
 	maxReplayAge  time.Duration
 	attachmentDir string
+	maxBody       int64
 }
 
 func newFixture(t *testing.T, o fixtureOpts) *fixture {
@@ -120,6 +121,9 @@ func newFixture(t *testing.T, o fixtureOpts) *fixture {
 	}
 	if o.maxReplayAge == 0 {
 		o.maxReplayAge = 7 * 24 * time.Hour
+	}
+	if o.maxBody == 0 {
+		o.maxBody = 1 << 20
 	}
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "hub.db")
@@ -153,6 +157,7 @@ func newFixture(t *testing.T, o fixtureOpts) *fixture {
 		Now:      now,
 
 		AttachmentDir: o.attachmentDir,
+		MaxBody:       o.maxBody,
 	}
 	f.srv.waiting = func() {
 		select {
@@ -585,6 +590,33 @@ func TestAttachmentEscapesRefused(t *testing.T) {
 	} {
 		expectError(t, sendAttachment(t, f, p), -32603, missingFile(p))
 	}
+	if calls := f.upstream.taken(); len(calls) != 0 {
+		t.Fatalf("upstream called: %+v", calls)
+	}
+}
+
+func TestRPCBodyOverLimitIsParseError(t *testing.T) {
+	f := newFixture(t, fixtureOpts{status: http.StatusCreated, body: `[{"timestamp":"1"}]`, maxBody: 256})
+	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": "send", "id": "x",
+		"params": map[string]any{"account": botNumber, "recipient": []any{sender}, "message": strings.Repeat("a", 512)}})
+	status, ct, out := f.rpc(t, body)
+	want := `{"error":{"code":-32700,"message":"parse error"},"id":null,"jsonrpc":"2.0"}` + "\n"
+	if status != http.StatusOK || ct != "application/json" || out != want {
+		t.Fatalf("got %d %q %q", status, ct, out)
+	}
+	if calls := f.upstream.taken(); len(calls) != 0 {
+		t.Fatalf("upstream called: %+v", calls)
+	}
+}
+
+func TestAttachmentOverLimitRefusedAsMissing(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "big.bin")
+	if err := os.WriteFile(path, bytes.Repeat([]byte("x"), 2048), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := newFixture(t, fixtureOpts{status: http.StatusCreated, body: `[{"timestamp":"1"}]`, attachmentDir: dir, maxBody: 1024})
+	expectError(t, sendAttachment(t, f, path), -32603, missingFile(path))
 	if calls := f.upstream.taken(); len(calls) != 0 {
 		t.Fatalf("upstream called: %+v", calls)
 	}

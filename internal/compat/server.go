@@ -25,6 +25,7 @@ type Server struct {
 	Keepalive time.Duration
 
 	AttachmentDir string
+	MaxBody       int64
 
 	polls pollStore
 
@@ -66,7 +67,7 @@ type rpcError struct {
 
 func (s *Server) rpc(w http.ResponseWriter, r *http.Request) {
 	var req rpcRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, s.MaxBody)).Decode(&req); err != nil {
 		writeRPC(w, nil, nil, &rpcError{Code: -32700, Message: "parse error"})
 		return
 	}

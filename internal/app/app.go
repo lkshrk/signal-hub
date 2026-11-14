@@ -211,6 +211,7 @@ func (a *App) listeners(st *store.Store) []listener {
 			Now:           a.now,
 			Keepalive:     keepalive,
 			AttachmentDir: c.Compat.AttachmentDir,
+			MaxBody:       a.cfg.Limits.MaxRequestBytes,
 		}
 		out = append(out, listener{name: "compat:" + c.Name, addr: c.Compat.Listen, handler: srv.Handler()})
 	}

@@ -355,6 +355,37 @@ func TestRunEndToEnd(t *testing.T) {
 	}
 }
 
+func compatRPC(t *testing.T, a *App, body string) string {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://"+a.Addr("compat:hermes")+"/api/v1/rpc", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	out, _ := io.ReadAll(res.Body)
+	return string(out)
+}
+
+func TestCompatRPCUsesRequestLimit(t *testing.T) {
+	up := testupstream.New(t)
+	cfg := newConfig(t, up.HTTPURL())
+	cfg.Limits.MaxRequestBytes = 512
+	a := start(t, cfg, slog.New(slog.DiscardHandler)).app
+	small := `{"jsonrpc":"2.0","method":"listContacts","id":1}`
+	if out := compatRPC(t, a, small); !strings.Contains(out, `"result":[]`) {
+		t.Fatalf("small rpc = %s", out)
+	}
+	big := `{"jsonrpc":"2.0","method":"listContacts","id":1,"params":{"pad":"` + strings.Repeat("a", 600) + `"}}`
+	if out := compatRPC(t, a, big); !strings.Contains(out, `"code":-32700`) {
+		t.Fatalf("big rpc = %s", out)
+	}
+}
+
 func seed(t *testing.T, path string, at time.Time, raws ...[]byte) {
 	t.Helper()
 	st, err := store.Open(context.Background(), path)

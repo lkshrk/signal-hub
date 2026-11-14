@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -84,7 +85,7 @@ func (s *Server) send(ctx context.Context, p map[string]any) (any, error) {
 	if paths, ok := p["attachments"].([]any); ok && len(paths) > 0 {
 		encoded := make([]string, 0, len(paths))
 		for _, raw := range paths {
-			a, err := encodeAttachment(s.AttachmentDir, str(raw))
+			a, err := encodeAttachment(s.AttachmentDir, str(raw), s.MaxBody)
 			if err != nil {
 				return nil, err
 			}
@@ -208,8 +209,8 @@ func textStyles(p map[string]any) []string {
 	return out
 }
 
-func encodeAttachment(dir, path string) (string, error) {
-	data, err := readAttachment(dir, path)
+func encodeAttachment(dir, path string, maxSize int64) (string, error) {
+	data, err := readAttachment(dir, path, maxSize)
 	if err != nil {
 		return "", fmt.Errorf("read attachment %s: %w", filepath.Base(path), err)
 	}
@@ -224,7 +225,7 @@ func encodeAttachment(dir, path string) (string, error) {
 }
 
 // readAttachment answers every refusal like a missing file, so a caller cannot probe what exists outside dir.
-func readAttachment(dir, path string) ([]byte, error) {
+func readAttachment(dir, path string, maxSize int64) ([]byte, error) {
 	missing := &fs.PathError{Op: "open", Path: path, Err: syscall.ENOENT}
 	if dir == "" || !filepath.IsAbs(path) {
 		return nil, missing
@@ -246,8 +247,16 @@ func readAttachment(dir, path string) ([]byte, error) {
 		return nil, missing
 	}
 	defer func() { _ = root.Close() }()
-	data, err := root.ReadFile(rel)
+	f, err := root.Open(rel)
 	if err != nil {
+		return nil, missing
+	}
+	defer func() { _ = f.Close() }()
+	if info, err := f.Stat(); err != nil || info.Size() > maxSize {
+		return nil, missing
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxSize+1))
+	if err != nil || int64(len(data)) > maxSize {
 		return nil, missing
 	}
 	return data, nil
