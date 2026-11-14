@@ -110,7 +110,7 @@ func Build(seq int64, receivedAt time.Time, raw []byte) (Message, error) {
 		Attachments: []Attachment{},
 		Raw:         append(json.RawMessage(nil), raw...),
 	}
-	if id, name := e.groupID(); id != "" {
+	if id, name, _ := e.groupID(); id != "" {
 		m.Group = &Group{ID: id, InternalID: id, RESTID: groupid.REST(id), Name: name}
 	}
 	if e.EditMessage != nil {

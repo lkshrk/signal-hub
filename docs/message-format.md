@@ -73,7 +73,7 @@ Precedence when an envelope carries several parts: `editMessage` > `dataMessage.
 | `restId` | string | `group.` plus base64 of `internalId`; the recipient form the REST API takes. |
 | `name` | string | Group name; empty for kinds that do not carry it (for example `typing`). |
 
-A group id that is not a valid internal id is dropped: the message is then treated as direct.
+A group id that is missing or not a valid internal id leaves `group` as `null`, and the hub treats the message as unclaimed instead of routing it by sender.
 
 ## Quote
 

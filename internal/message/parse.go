@@ -38,6 +38,7 @@ type Parsed struct {
 	SourceNumber string
 	SourceUUID   string
 	GroupID      string
+	GroupInvalid bool
 	Attachments  []AttachmentRef
 }
 
@@ -176,21 +177,22 @@ func (e *envelope) source() string {
 	return e.Source
 }
 
-func (e *envelope) groupID() (id, name string) {
+func (e *envelope) groupID() (id, name string, invalid bool) {
 	var raw string
 	if dm := e.content(); dm != nil && dm.GroupInfo != nil {
 		raw, name = dm.GroupInfo.GroupID, dm.GroupInfo.GroupName
+		invalid = raw == ""
 	} else if e.TypingMessage != nil {
 		raw = e.TypingMessage.GroupID
 	}
 	if raw == "" {
-		return "", ""
+		return "", "", invalid
 	}
 	id, err := groupid.Normalize(raw)
 	if err != nil {
-		return "", ""
+		return "", "", true
 	}
-	return id, name
+	return id, name, false
 }
 
 func Parse(raw []byte) (Parsed, error) {
@@ -198,7 +200,7 @@ func Parse(raw []byte) (Parsed, error) {
 	if err != nil {
 		return Parsed{}, err
 	}
-	gid, _ := e.groupID()
+	gid, _, invalid := e.groupID()
 	p := Parsed{
 		Kind:         e.kind(),
 		SignalTS:     e.Timestamp,
@@ -206,6 +208,7 @@ func Parse(raw []byte) (Parsed, error) {
 		SourceNumber: e.sourceNumber(),
 		SourceUUID:   e.SourceUUID,
 		GroupID:      gid,
+		GroupInvalid: invalid,
 	}
 	if dm := e.content(); dm != nil {
 		for _, a := range dm.Attachments {

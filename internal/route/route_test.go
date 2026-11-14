@@ -64,14 +64,11 @@ func newFixture(t *testing.T) fixture {
 	return fixture{New(consumers, clk.now, slog.New(slog.NewJSONHandler(logs, nil)), state), clk, logs, state}
 }
 
-func TestRouteGroupEitherConfigForm(t *testing.T) {
+func TestRouteGroup(t *testing.T) {
 	f := newFixture(t)
-	internalA := gid('a')
-	for _, id := range []string{internalA, groupid.REST(internalA)} {
-		got, ok := f.r.Route(message.Parsed{Kind: message.KindMessage, GroupID: id})
-		if !ok || got != "dsh" {
-			t.Fatalf("Route(%q) = (%q, %v), want (dsh, true)", id, got, ok)
-		}
+	got, ok := f.r.Route(message.Parsed{Kind: message.KindMessage, GroupID: gid('a')})
+	if !ok || got != "dsh" {
+		t.Fatalf("Route = (%q, %v), want (dsh, true)", got, ok)
 	}
 }
 
@@ -200,5 +197,69 @@ func TestConsumer(t *testing.T) {
 	}
 	if _, ok := f.r.Consumer("nobody"); ok {
 		t.Fatal("unknown consumer found")
+	}
+}
+
+func TestInvalidGroupFailsClosed(t *testing.T) {
+	f := newFixture(t)
+	for _, raw := range []string{
+		`{"envelope":{"sourceNumber":"` + number + `","timestamp":5,"dataMessage":{"message":"x","groupInfo":{"groupId":"not-a-group"}}}}`,
+		`{"envelope":{"sourceNumber":"` + number + `","timestamp":5,"dataMessage":{"message":"x","groupInfo":{}}}}`,
+	} {
+		p, err := message.Parse([]byte(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := f.r.Route(p); ok || got != "" {
+			t.Fatalf("Route = (%q, %v), want unclaimed", got, ok)
+		}
+		f.r.NoteUnclaimed(p)
+	}
+	lines := unclaimedLines(t, f.logs)
+	if len(lines) != 1 || lines[0]["group"] != "invalid" || strings.Contains(f.logs.String(), "not-a-group") {
+		t.Fatalf("lines = %v", lines)
+	}
+	if n := f.state.Snapshot().Unclaimed; n != 2 {
+		t.Fatalf("unclaimed = %d, want 2", n)
+	}
+}
+
+func TestRouteCanonicalVectors(t *testing.T) {
+	const (
+		internalA = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+		restA     = "group.QUFFQ0F3UUZCZ2NJQ1FvTERBME9EeEFSRWhNVUZSWVhHQmthR3h3ZEhoOD0="
+	)
+	cfgID, err := groupid.Normalize(restA)
+	if err != nil || cfgID != internalA {
+		t.Fatalf("Normalize(restA) = %q, %v", cfgID, err)
+	}
+	r := New([]config.Consumer{{Name: "dsh", GroupIDs: []string{cfgID}}}, time.Now, slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)), health.New(time.Now))
+	if got, ok := r.Route(message.Parsed{Kind: message.KindMessage, GroupID: internalA}); !ok || got != "dsh" {
+		t.Fatalf("Route = (%q, %v)", got, ok)
+	}
+	if got, ok := r.Allowed("dsh", internalA); !ok || got != restA {
+		t.Fatalf("Allowed = (%q, %v)", got, ok)
+	}
+}
+
+func TestUnclaimedKeyCap(t *testing.T) {
+	f := newFixture(t)
+	f.r.maxKeys = 2
+	for i := range 5 {
+		f.r.NoteUnclaimed(message.Parsed{Kind: message.KindMessage, SourceNumber: "+49151000000" + string(rune('0'+i))})
+	}
+	if n := len(unclaimedLines(t, f.logs)); n != 2 {
+		t.Fatalf("key lines = %d, want 2", n)
+	}
+	if n := strings.Count(f.logs.String(), "unclaimed messages suppressed"); n != 1 {
+		t.Fatalf("suppressed lines = %d, want 1", n)
+	}
+	if n := f.state.Snapshot().Unclaimed; n != 5 {
+		t.Fatalf("unclaimed = %d, want 5", n)
+	}
+	f.clk.set(time.Date(2026, 11, 15, 0, 0, 1, 0, time.UTC))
+	f.r.NoteUnclaimed(message.Parsed{Kind: message.KindMessage, SourceNumber: "+491510000009"})
+	if n := len(unclaimedLines(t, f.logs)); n != 3 {
+		t.Fatalf("after day change key lines = %d, want 3", n)
 	}
 }

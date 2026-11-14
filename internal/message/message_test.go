@@ -75,14 +75,27 @@ func TestParseKindOther(t *testing.T) {
 	}
 }
 
-func TestParseKeepsUnparsableGroupAsDirect(t *testing.T) {
-	raw := `{"envelope":{"sourceNumber":"+4915187654321","timestamp":5,"dataMessage":{"message":"x","groupInfo":{"groupId":"not-a-group"}}}}`
-	p, err := Parse([]byte(raw))
-	if err != nil {
-		t.Fatal(err)
+func TestParseFlagsInvalidGroup(t *testing.T) {
+	for name, raw := range map[string]string{
+		"bad id":   `{"envelope":{"sourceNumber":"+4915187654321","timestamp":5,"dataMessage":{"message":"x","groupInfo":{"groupId":"not-a-group"}}}}`,
+		"empty id": `{"envelope":{"sourceNumber":"+4915187654321","timestamp":5,"dataMessage":{"message":"x","groupInfo":{"groupName":"n"}}}}`,
+		"typing":   `{"envelope":{"sourceNumber":"+4915187654321","timestamp":5,"typingMessage":{"groupId":"not-a-group"}}}`,
+	} {
+		p, err := Parse([]byte(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.GroupID != "" || !p.GroupInvalid {
+			t.Fatalf("%s: got %+v", name, p)
+		}
 	}
-	if p.Kind != KindMessage || p.GroupID != "" {
-		t.Fatalf("got %+v", p)
+	p, err := Parse(fixture(t, "group_text"))
+	if err != nil || p.GroupInvalid || p.GroupID != internalA {
+		t.Fatalf("valid group: %+v %v", p, err)
+	}
+	p, err = Parse([]byte(`{"envelope":{"sourceNumber":"+4915187654321","timestamp":5,"typingMessage":{}}}`))
+	if err != nil || p.GroupInvalid {
+		t.Fatalf("direct typing: %+v %v", p, err)
 	}
 }
 

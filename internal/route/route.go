@@ -14,6 +14,8 @@ import (
 	"github.com/lkshrk/signal-hub/internal/message"
 )
 
+const maxLoggedKeys = 10000
+
 type Router struct {
 	consumers []config.Consumer
 	byName    map[string]int
@@ -22,9 +24,11 @@ type Router struct {
 	log       *slog.Logger
 	health    *health.State
 
-	mu     sync.Mutex
-	day    string
-	logged map[string]struct{}
+	mu         sync.Mutex
+	day        string
+	logged     map[string]struct{}
+	suppressed bool
+	maxKeys    int
 }
 
 func New(consumers []config.Consumer, now func() time.Time, log *slog.Logger, h *health.State) *Router {
@@ -36,6 +40,7 @@ func New(consumers []config.Consumer, now func() time.Time, log *slog.Logger, h 
 		log:       log,
 		health:    h,
 		logged:    map[string]struct{}{},
+		maxKeys:   maxLoggedKeys,
 	}
 	for i, c := range r.consumers {
 		r.byName[c.Name] = i
@@ -47,12 +52,11 @@ func New(consumers []config.Consumer, now func() time.Time, log *slog.Logger, h 
 }
 
 func (r *Router) Route(p message.Parsed) (string, bool) {
+	if p.GroupInvalid {
+		return "", false
+	}
 	if p.GroupID != "" {
-		id, err := groupid.Normalize(p.GroupID)
-		if err != nil {
-			return "", false
-		}
-		name, ok := r.groups[id]
+		name, ok := r.groups[p.GroupID]
 		return name, ok
 	}
 	for _, c := range r.consumers {
@@ -77,13 +81,14 @@ func (r *Router) NoteUnclaimed(p message.Parsed) {
 	r.health.Unclaimed()
 
 	attr, key := "group", p.GroupID
-	if key == "" {
+	switch {
+	case p.GroupInvalid:
+		key = "invalid"
+	case key == "":
 		attr, key = "sender", p.SourceNumber
 		if key == "" {
 			key = p.SourceUUID
 		}
-	} else if id, err := groupid.Normalize(key); err == nil {
-		key = id
 	}
 
 	day := r.now().UTC().Format(time.DateOnly)
@@ -91,14 +96,27 @@ func (r *Router) NoteUnclaimed(p message.Parsed) {
 	if day != r.day {
 		r.day = day
 		r.logged = map[string]struct{}{}
+		r.suppressed = false
 	}
 	mapKey := attr + ":" + key
 	_, seen := r.logged[mapKey]
-	r.logged[mapKey] = struct{}{}
+	var logKey, logSuppressed bool
+	switch {
+	case seen:
+	case len(r.logged) >= r.maxKeys:
+		logSuppressed = !r.suppressed
+		r.suppressed = true
+	default:
+		r.logged[mapKey] = struct{}{}
+		logKey = true
+	}
 	r.mu.Unlock()
 
-	if !seen {
+	if logKey {
 		r.log.Info("unclaimed message", "kind", p.Kind, attr, key)
+	}
+	if logSuppressed {
+		r.log.Info("unclaimed messages suppressed", "limit", r.maxKeys)
 	}
 }
 
