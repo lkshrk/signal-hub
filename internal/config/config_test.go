@@ -162,7 +162,7 @@ consumers:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d := cfg.Database; d.URL != "sqlite:///var/lib/signal-hub/hub.db" || d.Driver != "sqlite" || d.Path != "/var/lib/signal-hub/hub.db" {
+	if d := cfg.Database; d.URL != "sqlite:///var/lib/signal-hub/hub.db" || d.Path != "/var/lib/signal-hub/hub.db" {
 		t.Errorf("Database = %+v", d)
 	}
 	if cfg.TokenDir != "/etc/signal-hub/tokens" {

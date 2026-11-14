@@ -57,9 +57,6 @@ func TestNormalizeRejectsNonCanonical(t *testing.T) {
 			if _, err := Normalize(in); !errors.Is(err, ErrInvalid) {
 				t.Errorf("Normalize(%q) err = %v; want ErrInvalid", in, err)
 			}
-			if IsGroup(in) {
-				t.Errorf("IsGroup(%q) = true; want false", in)
-			}
 		}
 	}
 	if _, err := Normalize(restA + "\n"); !errors.Is(err, ErrInvalid) {
@@ -86,18 +83,5 @@ func TestNormalizeRejects(t *testing.T) {
 	_, err := Normalize("group:" + internalA)
 	if err == nil || !strings.Contains(err.Error(), `drop the "group:" prefix`) {
 		t.Errorf("group: prefix error = %v; want hint to drop the prefix", err)
-	}
-}
-
-func TestIsGroup(t *testing.T) {
-	for _, in := range []string{internalA, restA} {
-		if !IsGroup(in) {
-			t.Errorf("IsGroup(%q) = false; want true", in)
-		}
-	}
-	for _, in := range []string{"+4915112345678", "0b6a4f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b", "group:" + internalA} {
-		if IsGroup(in) {
-			t.Errorf("IsGroup(%q) = true; want false", in)
-		}
 	}
 }

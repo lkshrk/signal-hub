@@ -136,7 +136,7 @@ func TestReadFiltersConsumerAndKinds(t *testing.T) {
 	if got := seqs(p); !equalSeqs(got, []int64{1, 4}) || p.Next != 4 {
 		t.Fatalf("seqs = %v next = %d", got, p.Next)
 	}
-	if p.Records[0].Kind != message.KindMessage || p.Records[0].Consumer != "dsh" || string(p.Records[0].Raw) != `{"envelope":{}}` {
+	if p.Records[0].Kind != message.KindMessage || string(p.Records[0].Raw) != `{"envelope":{}}` {
 		t.Fatalf("record = %+v", p.Records[0])
 	}
 }

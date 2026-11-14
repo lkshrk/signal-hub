@@ -15,7 +15,6 @@ type Record struct {
 	Seq        int64
 	ReceivedAt time.Time
 	Kind       string
-	Consumer   string
 	Raw        []byte
 }
 
@@ -49,7 +48,7 @@ func (s *Store) Read(ctx context.Context, q Query) (Page, error) {
 func readPage(ctx context.Context, db bun.IDB, q Query) (Page, error) {
 	page := Page{Records: []Record{}, Next: q.After}
 	sel := db.NewSelect().Model((*messageRow)(nil)).
-		Column("seq", "received_at", "kind", "consumer").
+		Column("seq", "received_at", "kind").
 		Where("seq > ?", q.After).Order("seq").Limit(maxScan)
 	if q.Consumer == "" {
 		sel = sel.Where("consumer IS NULL")
@@ -69,11 +68,7 @@ scan:
 		case !q.NotBefore.IsZero() && r.ReceivedAt < notBefore:
 			page.Missed++
 		default:
-			rec := Record{Seq: r.Seq, ReceivedAt: time.UnixMilli(r.ReceivedAt).UTC(), Kind: r.Kind}
-			if r.Consumer != nil {
-				rec.Consumer = *r.Consumer
-			}
-			page.Records = append(page.Records, rec)
+			page.Records = append(page.Records, Record{Seq: r.Seq, ReceivedAt: time.UnixMilli(r.ReceivedAt).UTC(), Kind: r.Kind})
 			if q.Limit > 0 && len(page.Records) >= q.Limit {
 				break scan
 			}

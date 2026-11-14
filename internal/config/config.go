@@ -57,9 +57,8 @@ type Upstream struct {
 }
 
 type Database struct {
-	URL    string `yaml:"url"`
-	Driver string `yaml:"-"`
-	Path   string `yaml:"-"`
+	URL  string `yaml:"url"`
+	Path string `yaml:"-"`
 }
 
 type Limits struct {
@@ -332,7 +331,6 @@ func (c *Config) validateDatabase(fail func(format string, args ...any)) {
 	case u.RawQuery != "":
 		fail("database.url: query parameters are not supported")
 	default:
-		c.Database.Driver = u.Scheme
 		c.Database.Path = u.Path
 	}
 }

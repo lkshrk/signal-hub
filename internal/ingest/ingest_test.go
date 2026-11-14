@@ -454,7 +454,7 @@ func TestIngestUnclaimedNotedAfterAppend(t *testing.T) {
 	if ord.seen.Load() {
 		t.Error("unclaimed message was logged before the append")
 	}
-	if recs := r.records(t, ""); len(recs) != 1 || recs[0].Consumer != "" {
+	if recs := r.records(t, ""); len(recs) != 1 {
 		t.Errorf("unclaimed records = %+v", recs)
 	}
 	if got := r.metric(t, "signal_hub_unclaimed_total"); got != 1 {
