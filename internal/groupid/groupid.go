@@ -20,14 +20,14 @@ func Normalize(id string) (string, error) {
 		return "", fmt.Errorf("%w: drop the \"group:\" prefix", ErrInvalid)
 	}
 	if rest, ok := strings.CutPrefix(id, restPrefix); ok {
-		raw, err := base64.StdEncoding.DecodeString(rest)
-		if err != nil {
+		raw, err := base64.StdEncoding.Strict().DecodeString(rest)
+		if err != nil || base64.StdEncoding.EncodeToString(raw) != rest {
 			return "", fmt.Errorf("%w: REST form is not base64", ErrInvalid)
 		}
 		id = string(raw)
 	}
-	raw, err := base64.StdEncoding.DecodeString(id)
-	if err != nil || len(raw) != idBytes {
+	raw, err := base64.StdEncoding.Strict().DecodeString(id)
+	if err != nil || len(raw) != idBytes || base64.StdEncoding.EncodeToString(raw) != id {
 		return "", fmt.Errorf("%w: expected base64 of %d bytes", ErrInvalid, idBytes)
 	}
 	return id, nil

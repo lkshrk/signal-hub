@@ -47,6 +47,26 @@ func TestStdEncodingOnly(t *testing.T) {
 	}
 }
 
+func TestNormalizeRejectsNonCanonical(t *testing.T) {
+	trailingBits := strings.TrimSuffix(internalA, "Hh8=") + "Hh9="
+	if raw, err := base64.StdEncoding.DecodeString(trailingBits); err != nil || len(raw) != 32 {
+		t.Fatalf("vector must decode leniently to 32 bytes: %v", err)
+	}
+	for _, id := range []string{internalA + "\n", internalA + "\r\n", "AAEC\nAwQF" + internalA[8:], trailingBits} {
+		for _, in := range []string{id, "group." + base64.StdEncoding.EncodeToString([]byte(id)), REST(id)} {
+			if _, err := Normalize(in); !errors.Is(err, ErrInvalid) {
+				t.Errorf("Normalize(%q) err = %v; want ErrInvalid", in, err)
+			}
+			if IsGroup(in) {
+				t.Errorf("IsGroup(%q) = true; want false", in)
+			}
+		}
+	}
+	if _, err := Normalize(restA + "\n"); !errors.Is(err, ErrInvalid) {
+		t.Errorf("REST with trailing newline err = %v; want ErrInvalid", err)
+	}
+}
+
 func TestNormalizeRejects(t *testing.T) {
 	cases := []string{
 		"",
