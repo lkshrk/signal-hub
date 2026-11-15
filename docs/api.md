@@ -22,7 +22,7 @@ Response 200:
 {"messages": [], "next": 42, "missed": 0, "reset": false}
 ```
 
-- `messages` holds only the consumer's routed messages of the delivered kinds (`message`, `edit`, `reaction`, `pollVote`), in `seq` order, in the [neutral format](message-format.md).
+- `messages` holds only the consumer's routed messages of the delivered kinds (`message`, `edit`, `reaction`, `poll_vote`), in `seq` order, in the [neutral format](message-format.md).
 - `next` is the cursor for the following call. It advances past rows that were skipped.
 - Messages received longer ago than the consumer's `maxReplayAge` are not delivered. They are counted in `missed`, logged and counted in `signal_hub_missed_total{consumer}`.
 - `after` greater than the log head (the log was wiped) sets `reset: true` and reads from the oldest retained message.
